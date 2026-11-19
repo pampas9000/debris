@@ -52,6 +52,7 @@ func newPlanCmd(eng *debris.Engine) *cobra.Command {
 }
 
 func executePlan(cmd *cobra.Command, eng *debris.Engine, opts planOptions) error {
+	out := cmd.OutOrStdout()
 	resp, err := eng.Plan(commandContext(cmd), debris.PlanRequest{
 		From:           opts.From,
 		To:             opts.To,
@@ -64,10 +65,12 @@ func executePlan(cmd *cobra.Command, eng *debris.Engine, opts planOptions) error
 		LibraryName:    opts.LibraryName,
 	})
 	if err != nil {
+		if opts.JSON {
+			writeJSONError(out, err)
+		}
 		return err
 	}
 
-	out := cmd.OutOrStdout()
 	if opts.JSON {
 		return writeJSON(out, resp)
 	}

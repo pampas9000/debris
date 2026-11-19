@@ -45,6 +45,7 @@ func newInspectCmd(eng *debris.Engine) *cobra.Command {
 }
 
 func executeInspect(cmd *cobra.Command, eng *debris.Engine, opts inspectOptions) error {
+	out := cmd.OutOrStdout()
 	resp, err := eng.Inspect(commandContext(cmd), debris.InspectRequest{
 		Path:           opts.Path,
 		Format:         opts.Format,
@@ -52,10 +53,12 @@ func executeInspect(cmd *cobra.Command, eng *debris.Engine, opts inspectOptions)
 		IncludeHidden:  opts.IncludeHidden,
 	})
 	if err != nil {
+		if opts.JSON {
+			writeJSONError(out, err)
+		}
 		return err
 	}
 
-	out := cmd.OutOrStdout()
 	if opts.JSON {
 		return writeJSON(out, resp)
 	}

@@ -8,15 +8,23 @@ import (
 	"os/signal"
 	"syscall"
 
+	"debris/internal/engine"
+	"debris/internal/format/billfish"
+	"debris/internal/format/eagle"
+	"debris/internal/format/pixcall"
 	"debris/pkg/debris"
 
 	"github.com/spf13/cobra"
 )
 
-// defaultEngine constructs the default Debris Engine used by Execute().
-// Wave 3 wiring can replace this hook to attach internal/engine.
+// defaultEngine constructs the default Debris Engine wired to all format adapters.
 var defaultEngine = func() *debris.Engine {
-	return debris.NewEngine()
+	reg := engine.NewRegistry(
+		billfish.New(),
+		eagle.New(),
+		pixcall.New(),
+	)
+	return debris.NewEngine(debris.WithRunner(engine.NewRunner(reg)))
 }
 
 // NewRootCmd builds the root Debris CLI command wired to eng.
@@ -81,4 +89,12 @@ func writeJSON(w io.Writer, v any) error {
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+type jsonErrorEnvelope struct {
+	Error *debris.Error `json:"error"`
+}
+
+func writeJSONError(w io.Writer, err error) {
+	_ = writeJSON(w, jsonErrorEnvelope{Error: debris.AsError(err)})
 }

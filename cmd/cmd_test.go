@@ -333,3 +333,54 @@ func TestProtocolCmd(t *testing.T) {
 		t.Fatalf("expected formats JSON-RPC response, got: %s", outBuf.String())
 	}
 }
+
+func TestInspectJSONError(t *testing.T) {
+	runner := &mockRunner{
+		inspectErr: debris.NewError(debris.CodeNotFound, "source library missing", "/missing"),
+	}
+	stdout, _, err := runCLI(runner, "inspect", "-p", "/missing", "--json")
+	if err == nil {
+		t.Fatal("expected error from inspect --json")
+	}
+	var env jsonErrorEnvelope
+	if uErr := json.Unmarshal([]byte(stdout), &env); uErr != nil {
+		t.Fatalf("expected JSON error object, got %q (%v)", stdout, uErr)
+	}
+	if env.Error == nil || env.Error.Code != debris.CodeNotFound {
+		t.Fatalf("unexpected JSON error payload: %+v", env)
+	}
+}
+
+func TestPlanJSONError(t *testing.T) {
+	runner := &mockRunner{
+		planErr: debris.NewError(debris.CodeNotFound, "source library missing", "/missing"),
+	}
+	stdout, _, err := runCLI(runner, "plan", "-t", "eagle", "-i", "/missing", "-o", "/out", "--json")
+	if err == nil {
+		t.Fatal("expected error from plan --json")
+	}
+	var env jsonErrorEnvelope
+	if uErr := json.Unmarshal([]byte(stdout), &env); uErr != nil {
+		t.Fatalf("expected JSON error object, got %q (%v)", stdout, uErr)
+	}
+	if env.Error == nil || env.Error.Code != debris.CodeNotFound {
+		t.Fatalf("unexpected JSON error payload: %+v", env)
+	}
+}
+
+func TestDefaultEngineFormats(t *testing.T) {
+	eng := defaultEngine()
+	specs := eng.Formats()
+	if len(specs) != 3 {
+		t.Fatalf("expected 3 wired formats, got %d: %+v", len(specs), specs)
+	}
+	got := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		got[s.ID] = true
+	}
+	for _, want := range []string{"billfish", "eagle", "pixcall"} {
+		if !got[want] {
+			t.Fatalf("defaultEngine missing format %q (got %+v)", want, specs)
+		}
+	}
+}
