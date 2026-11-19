@@ -73,14 +73,14 @@ func TestWriterGeneratesPixcallCompatibleMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	md5AssetPath := filepath.Join(srcDir, "a.png")
-	b3AssetPath := filepath.Join(srcDir, "b.png")
-	for _, p := range []string{md5AssetPath, b3AssetPath} {
+	foreignHexAssetPath := filepath.Join(srcDir, "b.png")
+	for _, p := range []string{md5AssetPath, foreignHexAssetPath} {
 		if err := os.WriteFile(p, []byte("test:"+filepath.Base(p)), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	blake3Hex := strings.Repeat("ab", 32)
+	foreignHex := strings.Repeat("ab", 32)
 	created := time.Date(2026, 5, 1, 18, 22, 28, 123000000, time.UTC)
 
 	lib := &domain.Library{
@@ -92,7 +92,7 @@ func TestWriterGeneratesPixcallCompatibleMetadata(t *testing.T) {
 				ID:         "1",
 				FileName:   "a.png",
 				SourcePath: md5AssetPath,
-				Hash:       "42348E44802AB47B6F914828CCBFB61E", // Billfish MD5 -> should not be written as content_hash
+				Hash:       "42348E44802AB47B6F914828CCBFB61E", // Billfish MD5 -> replaced with Pixcall 4MiB chunked SHA-256
 				Kind:       domain.KindImage,
 				CreatedAt:  created,
 				ModifiedAt: created,
@@ -100,8 +100,8 @@ func TestWriterGeneratesPixcallCompatibleMetadata(t *testing.T) {
 			{
 				ID:         "2",
 				FileName:   "b.png",
-				SourcePath: b3AssetPath,
-				Hash:       strings.ToUpper(blake3Hex), // 64-hex -> normalized lowercase
+				SourcePath: foreignHexAssetPath,
+				Hash:       strings.ToUpper(foreignHex), // foreign 64-hex -> recomputed from actual file bytes
 				Kind:       domain.KindImage,
 				CreatedAt:  created,
 				ModifiedAt: created,
@@ -178,25 +178,38 @@ func TestWriterGeneratesPixcallCompatibleMetadata(t *testing.T) {
 		Name        string
 		ContentHash *string
 		Status      int64
+		Inode       *int64
+		Mtime       *int64
 		CreatedAt   string
 		UpdatedAt   string
 	}
 	var rows []rowCheck
-	if err := mainDB.Raw("SELECT name, content_hash, status, CAST(created_at AS TEXT) AS created_at, CAST(updated_at AS TEXT) AS updated_at FROM entries WHERE kind = 1 ORDER BY name ASC").Scan(&rows).Error; err != nil {
+	if err := mainDB.Raw("SELECT name, content_hash, status, inode, mtime, CAST(created_at AS TEXT) AS created_at, CAST(updated_at AS TEXT) AS updated_at FROM entries WHERE kind = 1 ORDER BY name ASC").Scan(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 2 {
 		t.Fatalf("got %d file entries, want 2", len(rows))
 	}
-	if rows[0].ContentHash != nil {
-		t.Fatalf("a.png content_hash = %q, want nil (MD5 must not be written)", *rows[0].ContentHash)
+	wantHashes := []string{
+		pixcallContentHashBytes([]byte("test:a.png")),
+		pixcallContentHashBytes([]byte("test:b.png")),
 	}
-	if rows[1].ContentHash == nil || *rows[1].ContentHash != blake3Hex {
-		t.Fatalf("b.png content_hash = %v, want %q", rows[1].ContentHash, blake3Hex)
-	}
-	for _, r := range rows {
-		if r.Status != 0 {
-			t.Fatalf("%s status = %d, want 0", r.Name, r.Status)
+	for i, r := range rows {
+		if r.ContentHash == nil || *r.ContentHash != wantHashes[i] {
+			t.Fatalf("%s content_hash = %v, want %q", r.Name, r.ContentHash, wantHashes[i])
+		}
+		if r.Status != 1 {
+			t.Fatalf("%s status = %d, want 1", r.Name, r.Status)
+		}
+		dstInfo, err := os.Stat(filepath.Join(outDir, r.Name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", r.Name, err)
+		}
+		if wantIno := fileInode(dstInfo); wantIno != nil && (r.Inode == nil || *r.Inode != *wantIno) {
+			t.Fatalf("%s inode = %v, want %d", r.Name, r.Inode, *wantIno)
+		}
+		if r.Mtime == nil || *r.Mtime != dstInfo.ModTime().UnixMilli() {
+			t.Fatalf("%s mtime = %v, want %d", r.Name, r.Mtime, dstInfo.ModTime().UnixMilli())
 		}
 		if r.CreatedAt != "2026-05-01 18:22:28.123" || r.UpdatedAt != "2026-05-01 18:22:28.123" {
 			t.Fatalf("%s timestamps = (%q, %q), want 2026-05-01 18:22:28.123", r.Name, r.CreatedAt, r.UpdatedAt)
@@ -284,5 +297,38 @@ func TestWriterNormalizesNFDEntryNamesToNFC(t *testing.T) {
 	wantSecond := strings.TrimSuffix(nfcFileName, ".png") + " (2).png"
 	if len(fileNames) != 2 || fileNames[0] != nfcFileName || fileNames[1] != wantSecond {
 		t.Fatalf("file names = %q, want [%q, %q]", fileNames, nfcFileName, wantSecond)
+	}
+}
+
+func TestPixcallContentHashMatchesSampleLibrary(t *testing.T) {
+	if got := pixcallContentHashBytes(nil); got != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+		t.Fatalf("empty hash = %s", got)
+	}
+
+	sampleRoot := filepath.Join("..", "..", "..", "resources", "sample_libraries", "pixcall.library")
+	adapter := New()
+	r, err := adapter.OpenReader(context.Background(), sampleRoot, format.ReadOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	lib, err := r.Read(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lib.Assets) == 0 {
+		t.Fatal("expected sample assets")
+	}
+	for _, a := range lib.Assets {
+		if a.Hash == "" {
+			continue
+		}
+		got, err := pixcallContentHashFile(a.SourcePath)
+		if err != nil {
+			t.Fatalf("pixcallContentHashFile(%q): %v", a.SourcePath, err)
+		}
+		if got != a.Hash {
+			t.Fatalf("content_hash(%q) = %s, want %s", a.FileName, got, a.Hash)
+		}
 	}
 }

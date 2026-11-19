@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -212,6 +213,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 		rel[len(parentRel)] = uniqueName
 		folderRelPaths[newID] = rel
 
+		var folderInode *int64
+		var folderMtime *int64
 		if !w.opts.DryRun {
 			var dirParts []string
 			if inTrash {
@@ -219,8 +222,14 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			} else {
 				dirParts = append([]string{w.rootPath}, rel...)
 			}
-			if err := os.MkdirAll(filepath.Join(dirParts...), 0o755); err != nil {
+			folderDiskPath := filepath.Join(dirParts...)
+			if err := os.MkdirAll(folderDiskPath, 0o755); err != nil {
 				return fmt.Errorf("pixcall: create folder %q: %w", uniqueName, err)
+			}
+			if dirInfo, err := os.Stat(folderDiskPath); err == nil {
+				folderInode = fileInode(dirInfo)
+				ms := dirInfo.ModTime().UnixMilli()
+				folderMtime = &ms
 			}
 		}
 
@@ -266,6 +275,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			UpdatedAt:   model.Timestamp{Time: modified},
 			NamePinyin:  namePinyin,
 			Status:      64,
+			Inode:       folderInode,
+			Mtime:       folderMtime,
 			IsHidden:    isHidden,
 			IsDeleted:   isDeleted,
 		})
@@ -325,6 +336,7 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	assetIDMap := make(map[string]int64, len(lib.Assets))
 	var medias []model.Media
 	var exifs []model.Exif
+	var hashTargets []fileHashTarget
 	totalAssets := int64(len(lib.Assets))
 
 	for idx, a := range lib.Assets {
@@ -452,7 +464,21 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 		if modified.IsZero() {
 			modified = created
 		}
-		mtimeMs := modified.UnixMilli()
+
+		// Record the actual filesystem inode and mtime (epoch ms) of the written target
+		// file so Pixcall's FS scan recognizes every imported entry as unchanged.
+		diskInfo := srcInfo
+		var entryInode *int64
+		if !w.opts.DryRun {
+			if st, err := os.Stat(dstPath); err == nil {
+				diskInfo = st
+			}
+			entryInode = fileInode(diskInfo)
+		}
+		mtimeMs := diskInfo.ModTime().UnixMilli()
+		if diskSize := diskInfo.Size(); diskSize > 0 {
+			fileSize = diskSize
+		}
 
 		mappedTags := mapAssetTags(a.TagIDs, tagIDMap)
 		var tagsStr *string
@@ -482,6 +508,7 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			isDeleted = 1
 		}
 
+		entryIdx := len(entries)
 		entries = append(entries, model.Entry{
 			ID:          entryID,
 			Revision:    1,
@@ -494,18 +521,21 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			Rating:      intPtr(a.Rating),
 			Size:        fileSize,
 			ContentType: contentType,
-			ContentHash: validPixcallContentHash(a.Hash),
 			Metadata:    strPtr(metaStr),
 			Ranking:     9000000000000000000 - int64(idx)*1000000000,
 			CreatedAt:   model.Timestamp{Time: created},
 			UpdatedAt:   model.Timestamp{Time: modified},
 			NamePinyin:  namePinyin,
 			Status:      0,
+			Inode:       entryInode,
 			Mtime:       &mtimeMs,
 			IsHidden:    isHidden,
 			IsDeleted:   isDeleted,
 			IsPrivate:   0,
 		})
+		if !w.opts.DryRun {
+			hashTargets = append(hashTargets, fileHashTarget{entryIdx: entryIdx, path: dstPath})
+		}
 
 		if medJSON := buildMediaMetadataJSON(a); medJSON != "" {
 			medias = append(medias, model.Media{
@@ -524,6 +554,10 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 
 		isPublic := !a.IsHidden && !inTrash && !folderIsHidden[parentID]
 		addDirectStat(parentID, fileSize, isPublic)
+	}
+
+	if err := populateFileContentHashes(ctx, entries, hashTargets); err != nil {
+		return err
 	}
 
 	// Resolve folder cover IDs from mapped asset IDs.
@@ -1067,20 +1101,83 @@ func buildMediaMetadataJSON(a *domain.Asset) string {
 	return string(data)
 }
 
-func validPixcallContentHash(raw string) *string {
-	s := strings.TrimSpace(raw)
-	if len(s) != 64 {
+type fileHashTarget struct {
+	entryIdx int
+	path     string
+}
+
+// populateFileContentHashes computes Pixcall's 4 MiB chunked SHA-256 content_hash for
+// every written file and advances its initial status from 0 to 1 (local content + hash ready).
+//
+// Why pre-populate content_hash, inode, disk mtime, and status=1:
+// When Pixcall opens a library, it runs FS scan and CheckEntryState concurrently against
+// `main.db`. If imported rows leave inode=NULL and content_hash=NULL, FS scan attempts
+// thousands of individual UPDATE transactions at the exact same time CheckEntryState writes
+// metadata/thumbnails/palettes. On large libraries that SQLite write contention causes
+// `database is locked` failures in FS scan, leaving affected rows permanently stuck at
+// `status=0` and `content_hash=NULL` with missing thumbnails in the UI. Pre-populating the
+// exact hash, inode, and disk mtime lets FS scan skip redundant UPDATEs cleanly while
+// CheckEntryState completes thumbnails, metadata, and palettes without contention.
+func populateFileContentHashes(ctx context.Context, entries []model.Entry, targets []fileHashTarget) error {
+	if len(targets) == 0 {
 		return nil
 	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-		if !isHex {
-			return nil
-		}
+
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 1 {
+		workers = 1
 	}
-	lower := strings.ToLower(s)
-	return &lower
+	if workers > 8 {
+		workers = 8
+	}
+	if workers > len(targets) {
+		workers = len(targets)
+	}
+
+	hashes := make([]string, len(targets))
+	jobs := make(chan int, len(targets))
+	for i := range targets {
+		jobs <- i
+	}
+	close(jobs)
+
+	var (
+		wg       sync.WaitGroup
+		errOnce  sync.Once
+		firstErr error
+	)
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				if err := ctx.Err(); err != nil {
+					errOnce.Do(func() { firstErr = err })
+					return
+				}
+				sum, err := pixcallContentHashFile(targets[idx].path)
+				if err != nil {
+					errOnce.Do(func() {
+						firstErr = fmt.Errorf("pixcall: hash %q: %w", targets[idx].path, err)
+					})
+					return
+				}
+				hashes[idx] = sum
+			}
+		}()
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return firstErr
+	}
+
+	for i, t := range targets {
+		h := hashes[i]
+		entries[t.entryIdx].ContentHash = &h
+		entries[t.entryIdx].Status = 1
+	}
+	return nil
 }
 
 func buildSeedKvs(installUUID string) []model.Kvs {

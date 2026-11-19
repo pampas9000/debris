@@ -27,8 +27,14 @@ Pixcall 桌面端校验与打开素材库时（`ValidateLibrary` / `open_metadat
 
 **约定**：[writer.go](../internal/format/pixcall/writer.go) 中的 `sanitizeEntryName` 对所有文件夹与文件条目统一执行 `norm.NFC.String(...)`，保证落库名称与去重判断均采用 Unicode NFC。
 
-## 3. 时间戳、哈希与初始状态
+## 3. 时间戳、`content_hash`（4 MiB 分块 SHA-256）、`inode`/`mtime` 与初始状态
 
 - **时间戳格式**：`entries`、`boards`、`remote_events` 中的时间戳需以 Pixcall 原生 UTC 字符串 `YYYY-MM-DD HH:MM:SS.sss` 写入（见 [timestamp.go](../internal/format/pixcall/model/timestamp.go)），避免 GORM SQLite 默认写入 `+00:00` 时区后缀导致客户端解析异常。
-- **`content_hash`**：Pixcall 使用 **64 位小写十六进制 BLAKE3** 作为 `content_hash` 与 `thumbs.db` 的索引键 `thumb/<content_hash>`。遇到非 64 位十六进制哈希（如 Billfish 的 32 位 MD5）时必须写 `NULL`，由 Pixcall 自行计算。
-- **`status`**：由于 `debris` 导出时不直接生成 WebP 缩略图与 BLAKE3 哈希，文件条目初始 `status` 必须写为 `0`（文件夹写 `64`），让 Pixcall 后台任务自动补算元数据、哈希与缩略图并推进到就绪状态。
+- **`content_hash` 算法**：Pixcall（`crates/file_hasher`）使用 **4 MiB 分块双层 SHA-256**，而非原始单次 SHA-256 或 BLAKE3（见 [file_hash.go](../internal/format/pixcall/file_hash.go)）：
+  - 将文件按 `4 * 1024 * 1024` 字节切块并分别计算每块的 32 字节原始 `SHA-256`；
+  - 再对所有分块摘要顺序拼接后做一次 `SHA-256`，得到 64 位小写十六进制字符串（同时也是 `thumbs.db` 中 `thumb/<content_hash>` 的键）。
+  - 因此绝不能把 Billfish 的 32 位 MD5 或其他格式的原始哈希直接写入 `content_hash`。
+- **预填 `content_hash`、`inode`、磁盘 `mtime` 与 `status = 1` 的原因**：
+  - Pixcall 打开素材库时，会并发启动 `FS scan` 与 `CheckEntryState` 后台任务读写 `main.db`。
+  - 如果导入阶段留空 `inode = NULL`、`content_hash = NULL` 且 `status = 0`，`FS scan` 会对全部文件逐条发起 `UPDATE entries` 事务（`FS scan update with no inode file` / `FS scan update file content`），与同时在写元数据、缩略图和色板的 `CheckEntryState` 抢占 SQLite 写锁，在大库下直接触发 `Diesel(DatabaseError(Unknown, "database is locked"))`，导致部分条目失败后永久卡在 `status = 0`、`content_hash = NULL` 且界面裂图（仅“在访达中显示”正常）。
+  - 由 `debris` 在导出时直接计算真实的 4 MiB 分块 SHA-256，并从目标磁盘路径写入真实 `inode`、磁盘 `mtime`（毫秒时间戳）及 `status = 1`（文件夹保持 `status = 64`），`FS scan` 扫描时即可判定全部文件与磁盘一致从而零写锁冲突，`CheckEntryState` 只需平稳补齐元数据与 `thumbs.db` 缩略图并推进到 `status = 2069`。
