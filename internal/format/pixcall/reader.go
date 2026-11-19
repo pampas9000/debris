@@ -291,8 +291,8 @@ func (r *Reader) Read(ctx context.Context) (*domain.Library, error) {
 		entryByID[e.ID] = e
 	}
 	if root, ok := entryByID[rootEntryID]; ok {
-		lib.CreatedAt = root.CreatedAt
-		lib.ModifiedAt = root.UpdatedAt
+		lib.CreatedAt = root.CreatedAt.Time
+		lib.ModifiedAt = root.UpdatedAt.Time
 	}
 
 	folderByEntryID := make(map[int64]model.Folders, len(rawFolders))
@@ -351,8 +351,8 @@ func (r *Reader) Read(ctx context.Context) (*domain.Library, error) {
 			Seq:         e.Ranking,
 			IsRecycle:   lineage.isDeleted,
 			IsHidden:    lineage.isHidden,
-			CreatedAt:   e.CreatedAt,
-			ModifiedAt:  e.UpdatedAt,
+			CreatedAt:   e.CreatedAt.Time,
+			ModifiedAt:  e.UpdatedAt.Time,
 		}
 		if fm, ok := folderByEntryID[e.ID]; ok {
 			df.Icon = derefString(fm.Icon)
@@ -442,8 +442,8 @@ func (r *Reader) buildDomainAsset(
 		TagIDs:     splitPipeIDs(derefString(e.Tags)),
 		IsHidden:   lineage.isHidden,
 		IsDeleted:  lineage.isDeleted,
-		CreatedAt:  e.CreatedAt,
-		ModifiedAt: e.UpdatedAt,
+		CreatedAt:  e.CreatedAt.Time,
+		ModifiedAt: e.UpdatedAt.Time,
 	}
 
 	if e.ParentID > 0 && e.ParentID != rootEntryID && e.ParentID != trashEntryID && includedFolders[e.ParentID] {

@@ -22,8 +22,8 @@ type Entry struct {
 	ContentHash *string   `gorm:"column:content_hash;type:varchar(64)" json:"content_hash,omitempty"`
 	Metadata    *string   `gorm:"column:metadata;type:text" json:"metadata,omitempty"`
 	Ranking     int64     `gorm:"column:ranking;type:bigint;not null;default:0" json:"ranking"`
-	CreatedAt   time.Time `gorm:"column:created_at;type:timestamp;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at;type:timestamp;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt   Timestamp `gorm:"column:created_at;type:timestamp;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   Timestamp `gorm:"column:updated_at;type:timestamp;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	SourcePath  *string   `gorm:"column:source_path;type:text" json:"source_path,omitempty"`
 	NamePinyin  *string   `gorm:"column:name_pinyin;type:text" json:"name_pinyin,omitempty"`
 	Status      int64     `gorm:"column:status;type:bigint;not null;default:0" json:"status"`
@@ -43,10 +43,10 @@ func (Entry) TableName() string {
 func (e *Entry) BeforeCreate(_ *gorm.DB) error {
 	now := time.Now().UTC()
 	if e.CreatedAt.IsZero() {
-		e.CreatedAt = now
+		e.CreatedAt = Timestamp{Time: now}
 	}
 	if e.UpdatedAt.IsZero() {
-		e.UpdatedAt = now
+		e.UpdatedAt = Timestamp{Time: now}
 	}
 	return nil
 }
@@ -54,7 +54,7 @@ func (e *Entry) BeforeCreate(_ *gorm.DB) error {
 // BeforeUpdate refreshes UpdatedAt when zero.
 func (e *Entry) BeforeUpdate(_ *gorm.DB) error {
 	if e.UpdatedAt.IsZero() {
-		e.UpdatedAt = time.Now().UTC()
+		e.UpdatedAt = Timestamp{Time: time.Now().UTC()}
 	}
 	return nil
 }

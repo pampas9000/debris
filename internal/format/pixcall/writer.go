@@ -96,9 +96,13 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	if err != nil {
 		return fmt.Errorf("pixcall: generate installation uuid: %w", err)
 	}
+	libraryUUID, err := newUUIDv4()
+	if err != nil {
+		return fmt.Errorf("pixcall: generate library uuid: %w", err)
+	}
 
 	if !w.opts.DryRun {
-		if err := w.prepareStorage(ctx, installUUID); err != nil {
+		if err := w.prepareStorage(ctx, libraryUUID); err != nil {
 			return err
 		}
 	}
@@ -143,8 +147,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			Size:        0,
 			ContentType: "unknown",
 			Ranking:     9000000000000000000,
-			CreatedAt:   libCreated,
-			UpdatedAt:   libModified,
+			CreatedAt:   model.Timestamp{Time: libCreated},
+			UpdatedAt:   model.Timestamp{Time: libModified},
 			Status:      64,
 		},
 		model.Entry{
@@ -156,8 +160,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			Size:        0,
 			ContentType: "unknown",
 			Ranking:     8999999999000000000,
-			CreatedAt:   libCreated,
-			UpdatedAt:   libModified,
+			CreatedAt:   model.Timestamp{Time: libCreated},
+			UpdatedAt:   model.Timestamp{Time: libModified},
 			Status:      64,
 		},
 	)
@@ -257,8 +261,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			Size:        0,
 			ContentType: "unknown",
 			Ranking:     ranking,
-			CreatedAt:   created,
-			UpdatedAt:   modified,
+			CreatedAt:   model.Timestamp{Time: created},
+			UpdatedAt:   model.Timestamp{Time: modified},
 			NamePinyin:  namePinyin,
 			Status:      64,
 			IsHidden:    isHidden,
@@ -489,13 +493,13 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			Rating:      intPtr(a.Rating),
 			Size:        fileSize,
 			ContentType: contentType,
-			ContentHash: strPtr(a.Hash),
+			ContentHash: validPixcallContentHash(a.Hash),
 			Metadata:    strPtr(metaStr),
 			Ranking:     9000000000000000000 - int64(idx)*1000000000,
-			CreatedAt:   created,
-			UpdatedAt:   modified,
+			CreatedAt:   model.Timestamp{Time: created},
+			UpdatedAt:   model.Timestamp{Time: modified},
 			NamePinyin:  namePinyin,
-			Status:      2069,
+			Status:      0,
 			Mtime:       &mtimeMs,
 			IsHidden:    isHidden,
 			IsDeleted:   isDeleted,
@@ -651,19 +655,22 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	return nil
 }
 
-func (w *Writer) prepareStorage(ctx context.Context, installUUID string) error {
+func (w *Writer) prepareStorage(ctx context.Context, libraryUUID string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	dbPath := mainDBPath(w.rootPath)
-	if _, err := os.Stat(dbPath); err == nil {
-		if !w.opts.Overwrite {
-			return fmt.Errorf("pixcall: target library already exists at %q", w.rootPath)
-		}
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			if err := os.Remove(dbPath + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("pixcall: remove existing database %q: %w", dbPath+suffix, err)
+	thumbsPath := thumbsDBPath(w.rootPath)
+	if _, err := os.Stat(dbPath); err == nil && !w.opts.Overwrite {
+		return fmt.Errorf("pixcall: target library already exists at %q", w.rootPath)
+	}
+	if w.opts.Overwrite {
+		for _, base := range []string{dbPath, thumbsPath} {
+			for _, suffix := range []string{"", "-wal", "-shm"} {
+				if err := os.Remove(base + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("pixcall: remove existing database %q: %w", base+suffix, err)
+				}
 			}
 		}
 	}
@@ -693,14 +700,51 @@ func (w *Writer) prepareStorage(ctx context.Context, installUUID string) error {
 	}
 
 	existingIDs, _ := filepath.Glob(filepath.Join(pixcallDir, "*.id"))
-	if len(existingIDs) == 0 {
-		idFilePath := filepath.Join(pixcallDir, installUUID+".id")
+	if w.opts.Overwrite {
+		for _, oldID := range existingIDs {
+			if err := os.Remove(oldID); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("pixcall: remove old id marker %q: %w", oldID, err)
+			}
+		}
+		existingIDs = nil
+	}
+	if len(existingIDs) > 0 {
+		base := filepath.Base(existingIDs[0])
+		libraryUUID = strings.TrimSuffix(base, ".id")
+	} else {
+		idFilePath := filepath.Join(pixcallDir, libraryUUID+".id")
 		f, err := os.OpenFile(idFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 		if err != nil {
 			return fmt.Errorf("pixcall: create id marker %q: %w", idFilePath, err)
 		}
 		if err := f.Close(); err != nil {
 			return fmt.Errorf("pixcall: close id marker %q: %w", idFilePath, err)
+		}
+	}
+
+	keystoreBytes, err := buildKeystoreBytes(libraryUUID, time.Now().UTC().Unix())
+	if err != nil {
+		return err
+	}
+	for _, ksName := range []string{"keystore", "keystore.backup"} {
+		ksPath := filepath.Join(pixcallDir, ksName)
+		if err := os.WriteFile(ksPath, keystoreBytes, 0o644); err != nil {
+			return fmt.Errorf("pixcall: write %s: %w", ksName, err)
+		}
+	}
+
+	if _, err := os.Stat(thumbsPath); errors.Is(err, os.ErrNotExist) {
+		thumbsDB, thumbsCloser, err := kit.OpenReadWrite(thumbsPath)
+		if err != nil {
+			return fmt.Errorf("pixcall: open thumbs database %q: %w", thumbsPath, err)
+		}
+		migrateErr := model.MigrateThumbs(thumbsDB.WithContext(ctx))
+		closeErr := thumbsCloser.Close()
+		if migrateErr != nil {
+			return fmt.Errorf("pixcall: migrate thumbs schema: %w", migrateErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("pixcall: close thumbs database %q: %w", thumbsPath, closeErr)
 		}
 	}
 
@@ -1008,6 +1052,22 @@ func buildMediaMetadataJSON(a *domain.Asset) string {
 		return ""
 	}
 	return string(data)
+}
+
+func validPixcallContentHash(raw string) *string {
+	s := strings.TrimSpace(raw)
+	if len(s) != 64 {
+		return nil
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+		if !isHex {
+			return nil
+		}
+	}
+	lower := strings.ToLower(s)
+	return &lower
 }
 
 func buildSeedKvs(installUUID string) []model.Kvs {

@@ -142,9 +142,11 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 	}
 
 	_, cfgErr := os.Stat(filepath.Join(absPath, ".pixcall", "config.json"))
+	_, keystoreErr := os.Stat(filepath.Join(absPath, ".pixcall", "keystore"))
 	details := map[string]any{
-		"dbPath":    dbPath,
-		"hasConfig": cfgErr == nil,
+		"dbPath":      dbPath,
+		"hasConfig":   cfgErr == nil,
+		"hasKeystore": keystoreErr == nil,
 	}
 	if version != "" {
 		details["schemaVersion"] = version
@@ -163,4 +165,8 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 
 func mainDBPath(rootPath string) string {
 	return filepath.Join(rootPath, ".pixcall", "database", "main.db")
+}
+
+func thumbsDBPath(rootPath string) string {
+	return filepath.Join(rootPath, ".pixcall", "database", "thumbs.db")
 }

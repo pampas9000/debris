@@ -24,7 +24,7 @@ type Board struct {
 	SortOrder   *string   `gorm:"column:sort_order;type:varchar(16)" json:"sort_order,omitempty"`
 	Icon        *string   `gorm:"column:icon;type:varchar(32)" json:"icon,omitempty"`
 	IconColor   *string   `gorm:"column:icon_color;type:varchar(16)" json:"icon_color,omitempty"`
-	CreatedAt   time.Time `gorm:"column:created_at;type:timestamp;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	CreatedAt   Timestamp `gorm:"column:created_at;type:timestamp;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 }
 
 // TableName implements gorm.io/gorm/schema.Tabler.
@@ -35,7 +35,7 @@ func (Board) TableName() string {
 // BeforeCreate populates CreatedAt when zero.
 func (b *Board) BeforeCreate(_ *gorm.DB) error {
 	if b.CreatedAt.IsZero() {
-		b.CreatedAt = time.Now().UTC()
+		b.CreatedAt = Timestamp{Time: time.Now().UTC()}
 	}
 	return nil
 }
