@@ -1,0 +1,25 @@
+{
+    "audioVolume": 0,
+    "closeLibrarType": "5",
+    "closeLibraryId": "0",
+    "cloudLocalFolderId": "-1",
+    "coverPath": "",
+    "createdDefaultCloudLocalFolder": true,
+    "createdDefaultDownloadFolder": true,
+    "downloadFolderId": "-1",
+    "downloadFolderName": "",
+    "folders": [
+    ],
+    "importType": 1,
+    "libraryName": "billfish.library",
+    "openedColorOptimize": true,
+    "previewType": 0,
+    "tag_ids": [
+        5,
+        4,
+        3,
+        2,
+        1
+    ],
+    "videoVolume": 0
+}
