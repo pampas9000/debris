@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
 	"gorm.io/gorm"
 
 	"debris/internal/domain"
@@ -936,13 +937,25 @@ func flattenAndOrderFolders(roots []*domain.Folder) []*domain.Folder {
 	return ordered
 }
 
+// sanitizeEntryName normalizes folder and file names for Pixcall's SQLite entries table.
+//
+// In particular, it normalizes strings to Unicode NFC: on macOS (APFS/HFS+), filenames returned
+// by filesystem APIs or stored by other asset managers (such as Japanese kana with dakuten like
+// "ナヒーダ" or "おめでとう") are often in Unicode NFD. When Pixcall opens a library and runs its
+// filesystem scan (`FS scan`), it normalizes disk filenames to NFC before matching `(parent_id, name)`
+// in `main.db`. Storing NFD strings in `entries.name` (while `inode` is NULL) prevents Pixcall from
+// matching the pre-imported row, causing `FS scan` to create a duplicate NFC entry for the same
+// file while skipping deletion of the unmatched NFD row (`FS scan skip deleting entry without inode`).
+// The original NFD row is then left orphaned with `status = 0` and `content_hash = NULL`, breaking
+// thumbnail lookup (`thumb/<content_hash>`) in the UI even though macOS Finder can still locate the file.
 func sanitizeEntryName(name, fallback string) string {
 	cleaned := strings.TrimSpace(name)
 	cleaned = strings.ReplaceAll(cleaned, "/", "_")
 	cleaned = strings.ReplaceAll(cleaned, "\\", "_")
 	cleaned = strings.ReplaceAll(cleaned, "\x00", "")
+	cleaned = norm.NFC.String(cleaned)
 	if cleaned == "" || cleaned == "." || cleaned == ".." {
-		return fallback
+		return norm.NFC.String(fallback)
 	}
 	return cleaned
 }

@@ -203,3 +203,86 @@ func TestWriterGeneratesPixcallCompatibleMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestWriterNormalizesNFDEntryNamesToNFC(t *testing.T) {
+	ctx := context.Background()
+	srcDir := t.TempDir()
+
+	// NFD forms typical of macOS APFS filenames ("ナヒーダ" = タ+\u3099, "フォーダ" = タ+\u3099).
+	nfdFileName := "#女の子 ナヒータ\u3099誕生祭2023 - misyune的插画.png"
+	nfcFileName := "#女の子 ナヒーダ誕生祭2023 - misyune的插画.png"
+	nfdFolderName := "おめて\u3099とう"
+	nfcFolderName := "おめでとう"
+
+	srcImg := filepath.Join(srcDir, nfdFileName)
+	if err := os.WriteFile(srcImg, []byte("fake-png-data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lib := &domain.Library{
+		Name: "NFDTest",
+		Folders: []*domain.Folder{
+			{ID: "f1", Name: nfdFolderName},
+		},
+		Assets: []*domain.Asset{
+			{
+				ID:         "a1",
+				Name:       strings.TrimSuffix(nfdFileName, ".png"),
+				FileName:   nfdFileName,
+				Ext:        "png",
+				Kind:       domain.KindImage,
+				SourcePath: srcImg,
+				FolderIDs:  []string{"f1"},
+			},
+			{
+				ID:         "a2",
+				Name:       strings.TrimSuffix(nfcFileName, ".png"),
+				FileName:   nfcFileName,
+				Ext:        "png",
+				Kind:       domain.KindImage,
+				SourcePath: srcImg,
+				FolderIDs:  []string{"f1"},
+			},
+		},
+	}
+
+	outDir := filepath.Join(t.TempDir(), "nfd.pixcall")
+	var adapter Adapter
+	w, err := adapter.OpenWriter(ctx, outDir, format.WriteOptions{
+		CopyMode:  format.CopyModeCopy,
+		Overwrite: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(ctx, lib, nil); err != nil {
+		_ = w.Close()
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	mainDB, closer, err := kit.OpenReadOnly(filepath.Join(outDir, ".pixcall", "database", "main.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closer.Close()
+
+	var folderNames []string
+	if err := mainDB.Raw("SELECT name FROM entries WHERE kind = 0 AND parent_id > 0 ORDER BY id ASC").Scan(&folderNames).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(folderNames) != 1 || folderNames[0] != nfcFolderName {
+		t.Fatalf("folder names = %q, want [%q]", folderNames, nfcFolderName)
+	}
+
+	var fileNames []string
+	if err := mainDB.Raw("SELECT name FROM entries WHERE kind = 1 ORDER BY ranking DESC").Scan(&fileNames).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantSecond := strings.TrimSuffix(nfcFileName, ".png") + " (2).png"
+	if len(fileNames) != 2 || fileNames[0] != nfcFileName || fileNames[1] != wantSecond {
+		t.Fatalf("file names = %q, want [%q, %q]", fileNames, nfcFileName, wantSecond)
+	}
+}
