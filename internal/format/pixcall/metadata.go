@@ -84,10 +84,7 @@ func encodeColorPalette(colors []domain.PaletteColor) string {
 		if ratio > 100 {
 			ratio = 100
 		}
-		weight := uint32(math.Round((ratio / 100.0) * 255.0))
-		if weight > 255 {
-			weight = 255
-		}
+		weight := min(uint32(math.Round((ratio/100.0)*255.0)), 255)
 		packed := (uint32(c.R) << 24) | (uint32(c.G) << 16) | (uint32(c.B) << 8) | weight
 		parts = append(parts, strconv.FormatUint(uint64(packed), 10))
 	}

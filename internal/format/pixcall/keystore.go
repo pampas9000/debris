@@ -4,7 +4,8 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/bits"
@@ -44,7 +45,7 @@ func buildKeystoreBytes(libraryID string, lastActiveUnix int64) ([]byte, error) 
 			Status: "ready",
 		},
 	}
-	plaintext, err := json.MarshalIndent(payload, "", "  ")
+	plaintext, err := json.Marshal(payload, jsontext.WithIndent("  "))
 	if err != nil {
 		return nil, fmt.Errorf("pixcall: marshal keystore payload: %w", err)
 	}
@@ -124,7 +125,7 @@ func chacha20Block(key [32]byte, counter uint32, nonce [12]byte) [64]byte {
 	state[1] = 0x3320646e
 	state[2] = 0x79622d32
 	state[3] = 0x6b206574
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		state[4+i] = binary.LittleEndian.Uint32(key[i*4:])
 	}
 	state[12] = counter
@@ -133,7 +134,7 @@ func chacha20Block(key [32]byte, counter uint32, nonce [12]byte) [64]byte {
 	state[15] = binary.LittleEndian.Uint32(nonce[8:])
 
 	w := state
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		chacha20QuarterRound(&w, 0, 4, 8, 12)
 		chacha20QuarterRound(&w, 1, 5, 9, 13)
 		chacha20QuarterRound(&w, 2, 6, 10, 14)
@@ -145,7 +146,7 @@ func chacha20Block(key [32]byte, counter uint32, nonce [12]byte) [64]byte {
 	}
 
 	var out [64]byte
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		binary.LittleEndian.PutUint32(out[i*4:], w[i]+state[i])
 	}
 	return out
@@ -155,11 +156,8 @@ func chacha20XOR(dst, src []byte, key [32]byte, counter uint32, nonce [12]byte) 
 	for offset := 0; offset < len(src); offset += 64 {
 		block := chacha20Block(key, counter, nonce)
 		counter++
-		n := len(src) - offset
-		if n > 64 {
-			n = 64
-		}
-		for i := 0; i < n; i++ {
+		n := min(len(src)-offset, 64)
+		for i := range n {
 			dst[offset+i] = src[offset+i] ^ block[i]
 		}
 	}
@@ -278,7 +276,7 @@ func poly1305AEADTag(otk [32]byte, aad, ciphertext []byte) [16]byte {
 	g[4] = h[4] + c - (1 << 26)
 
 	mask := (g[4] >> 63) - 1
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		h[i] = (h[i] &^ mask) | (g[i] & mask)
 	}
 

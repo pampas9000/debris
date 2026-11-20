@@ -1,9 +1,46 @@
 package model
 
+import (
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"fmt"
+)
+
 // Palette represents a dominant color entry in an Eagle item's palettes array.
 type Palette struct {
 	Color [3]uint8 `json:"color"`
 	Ratio float64  `json:"ratio"`
+}
+
+// MarshalJSONTo encodes Palette with Color as a 3-element JSON number array
+// because encoding/json/v2 encodes [3]uint8 as a base64 string by default.
+func (p Palette) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return json.MarshalEncode(enc, struct {
+		Color [3]uint16 `json:"color"`
+		Ratio float64   `json:"ratio"`
+	}{
+		Color: [3]uint16{uint16(p.Color[0]), uint16(p.Color[1]), uint16(p.Color[2])},
+		Ratio: p.Ratio,
+	})
+}
+
+// UnmarshalJSONFrom decodes Palette with Color from a 3-element JSON number array.
+func (p *Palette) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	var raw struct {
+		Color [3]uint16 `json:"color"`
+		Ratio float64   `json:"ratio"`
+	}
+	if err := json.UnmarshalDecode(dec, &raw); err != nil {
+		return err
+	}
+	for i, c := range raw.Color {
+		if c > 255 {
+			return fmt.Errorf("palette color channel %d out of uint8 range: %d", i, c)
+		}
+		p.Color[i] = uint8(c)
+	}
+	p.Ratio = raw.Ratio
+	return nil
 }
 
 // ImageMetadata represents images/<id>.info/metadata.json in an Eagle 4.0.0 library.

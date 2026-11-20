@@ -613,8 +613,7 @@ func wrapEngineError(err error, defaultCode, message string) error {
 	if err == nil {
 		return nil
 	}
-	var structured *debris.Error
-	if errors.As(err, &structured) {
+	if structured, ok := errors.AsType[*debris.Error](err); ok {
 		return structured
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

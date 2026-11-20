@@ -21,7 +21,7 @@ Debris 是一款跨平台命令列工具（同時提供 JSON-RPC 2.0 stdio 服�
 * **檢查與轉換規劃：** 使用 `inspect` 查看素材庫摘要；使用 `plan` 在實際轉換前預覽資產數量、警告訊息以及潛在的相容性損失。
 * **靈活的素材傳輸模式：** 支援 `copy`、`hardlink` 與 `auto`（`--copy-mode`），並提供 `--overwrite`、`--include-deleted`、`--include-hidden` 和 `--name` 等選項。
 * **機器可讀輸出：** 透過 `--json` 輸出 NDJSON 進度事件與最終結果。
-* **跨平台相容：** 基於 Go（`1.23+`）建構，支援 macOS、Linux 與 Windows。
+* **跨平台相容：** 基於 Go（`1.27+`）建構，支援 macOS、Linux 與 Windows。
 
 ## 用法
 

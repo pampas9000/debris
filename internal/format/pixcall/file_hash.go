@@ -15,10 +15,7 @@ const pixcallHashChunkSize = 4 * 1024 * 1024
 func pixcallContentHashBytes(data []byte) string {
 	outer := sha256.New()
 	for offset := 0; offset < len(data); offset += pixcallHashChunkSize {
-		end := offset + pixcallHashChunkSize
-		if end > len(data) {
-			end = len(data)
-		}
+		end := min(offset+pixcallHashChunkSize, len(data))
 		chunkSum := sha256.Sum256(data[offset:end])
 		_, _ = outer.Write(chunkSum[:])
 	}

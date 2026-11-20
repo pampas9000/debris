@@ -1,12 +1,13 @@
 package eagle
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -369,8 +370,8 @@ func buildEagleFolders(folders []*domain.Folder, usedIDs map[string]struct{}, no
 	}
 
 	sortBySeq := func(ids []string) {
-		sort.SliceStable(ids, func(i, j int) bool {
-			return byID[ids[i]].Seq < byID[ids[j]].Seq
+		slices.SortStableFunc(ids, func(a, b string) int {
+			return cmp.Compare(byID[a].Seq, byID[b].Seq)
 		})
 	}
 	sortBySeq(rootIDs)

@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -838,8 +838,14 @@ func topoSort[T any](items []T, getID, getParentID func(T) string, less func(a, 
 	}
 
 	sortSlice := func(s []T) {
-		sort.SliceStable(s, func(i, j int) bool {
-			return less(s[i], s[j])
+		slices.SortStableFunc(s, func(a, b T) int {
+			if less(a, b) {
+				return -1
+			}
+			if less(b, a) {
+				return 1
+			}
+			return 0
 		})
 	}
 	sortSlice(roots)

@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	eagleIDLength  = 13
-	eagleCharset   = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	eagleCharsetN  = byte(len(eagleCharset)) // 36
-	eagleMaxValid  = 252                     // largest multiple of 36 <= 255 for rejection sampling
+	eagleIDLength = 13
+	eagleCharset  = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	eagleCharsetN = byte(len(eagleCharset)) // 36
+	eagleMaxValid = 252                     // largest multiple of 36 <= 255 for rejection sampling
 
 	snowflakeEpochMs int64 = 1577836800000 // 2020-01-01T00:00:00Z
 	workerBits       uint8 = 10
@@ -93,10 +93,7 @@ func (g *snowflakeGenerator) Next() int64 {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	now := time.Now().UnixMilli() - snowflakeEpochMs
-	if now < 0 {
-		now = 0
-	}
+	now := max(time.Now().UnixMilli()-snowflakeEpochMs, 0)
 
 	if now > g.lastMs {
 		g.lastMs = now

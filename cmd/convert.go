@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"sync"
 
@@ -57,12 +58,11 @@ func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts transferOptions
 	if opts.JSON {
 		cmd.SilenceErrors = true
 		var mu sync.Mutex
-		enc := json.NewEncoder(out)
-		enc.SetEscapeHTML(false)
+		enc := jsontext.NewEncoder(out)
 		writeLine := func(line ConvertNDJSONLine) {
 			mu.Lock()
 			defer mu.Unlock()
-			_ = enc.Encode(line)
+			_ = json.MarshalEncode(enc, line)
 		}
 
 		resp, err := eng.Convert(commandContext(cmd), req, func(ev debris.Event) {

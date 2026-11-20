@@ -72,8 +72,7 @@ func AsError(err error) *Error {
 	if err == nil {
 		return nil
 	}
-	var structured *Error
-	if errors.As(err, &structured) {
+	if structured, ok := errors.AsType[*Error](err); ok {
 		return structured
 	}
 	return WrapError(CodeInternal, err.Error(), err)

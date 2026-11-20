@@ -24,5 +24,5 @@ type Tag struct {
 	Color     string    `json:"color,omitempty"`
 	Icon      string    `json:"icon,omitempty"`
 	Seq       int64     `json:"seq,omitempty"`
-	CreatedAt time.Time `json:"createdAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt,omitzero"`
 }

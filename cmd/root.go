@@ -2,7 +2,8 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"os"
@@ -87,10 +88,8 @@ func commandContext(cmd *cobra.Command) context.Context {
 }
 
 func writeJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	enc := jsontext.NewEncoder(w, jsontext.WithIndent("  "))
+	return json.MarshalEncode(enc, v)
 }
 
 type jsonErrorEnvelope struct {

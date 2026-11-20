@@ -47,16 +47,14 @@ func TestNewEagleID_ConcurrencyUniqueness(t *testing.T) {
 
 	var wg sync.WaitGroup
 	results := make([][]string, workers)
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for w := range workers {
+		wg.Go(func() {
 			ids := make([]string, perWorker)
-			for i := 0; i < perWorker; i++ {
+			for i := range perWorker {
 				ids[i] = NewEagleID("M")
 			}
-			results[idx] = ids
-		}(w)
+			results[w] = ids
+		})
 	}
 	wg.Wait()
 
@@ -77,7 +75,7 @@ func TestNewEagleID_ConcurrencyUniqueness(t *testing.T) {
 func TestNewSnowflakeID_MonotonicAndUniqueUnderConcurrency(t *testing.T) {
 	// Sequential strict monotonicity check (exceeding 4096/ms burst limit too).
 	prev := int64(0)
-	for i := 0; i < 6000; i++ {
+	for i := range 6000 {
 		id := NewSnowflakeID()
 		if id <= 0 {
 			t.Fatalf("expected positive snowflake ID, got %d", id)
@@ -92,16 +90,14 @@ func TestNewSnowflakeID_MonotonicAndUniqueUnderConcurrency(t *testing.T) {
 	const perWorker = 1000
 	var wg sync.WaitGroup
 	results := make([][]int64, workers)
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for w := range workers {
+		wg.Go(func() {
 			ids := make([]int64, perWorker)
-			for i := 0; i < perWorker; i++ {
+			for i := range perWorker {
 				ids[i] = NewSnowflakeID()
 			}
-			results[idx] = ids
-		}(w)
+			results[w] = ids
+		})
 	}
 	wg.Wait()
 

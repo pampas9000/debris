@@ -3,7 +3,8 @@ package eagle_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io/fs"
 	"os"
@@ -702,7 +703,7 @@ func TestIntegrationSampleEagleLibraryRoundTrip(t *testing.T) {
 
 func writeJSONFile(t *testing.T, path string, v any) {
 	t.Helper()
-	data, err := json.MarshalIndent(v, "", "  ")
+	data, err := json.Marshal(v, jsontext.WithIndent("  "))
 	if err != nil {
 		t.Fatal(err)
 	}

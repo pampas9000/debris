@@ -2,7 +2,8 @@ package kit
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -50,7 +51,7 @@ func WriteJSON(path string, v any) error {
 		return errors.New("kit: empty json output path")
 	}
 
-	data, err := json.MarshalIndent(v, "", "    ")
+	data, err := json.Marshal(v, jsontext.WithIndent("    "))
 	if err != nil {
 		return fmt.Errorf("kit: marshal json: %w", err)
 	}

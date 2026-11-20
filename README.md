@@ -21,7 +21,7 @@ Debris is a cross-platform command-line tool (and JSON-RPC 2.0 stdio server) for
 * **Inspection & Pre-Flight Planning:** Use `inspect` to summarize a library and `plan` to preview asset counts, warnings, and potential compatibility losses before converting.
 * **Flexible Asset Transfer:** Supports `copy`, `hardlink`, and `auto` (`--copy-mode`), along with `--overwrite`, `--include-deleted`, `--include-hidden`, and `--name`.
 * **Machine-Readable Output:** Emit NDJSON progress/result streams with `--json`.
-* **Cross-Platform:** Written in Go (`1.23+`) for macOS, Linux, and Windows.
+* **Cross-Platform:** Written in Go (`1.27+`) for macOS, Linux, and Windows.
 
 ## Usage
 

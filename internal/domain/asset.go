@@ -62,8 +62,8 @@ type Asset struct {
 	TagIDs      []string       `json:"tagIds,omitempty"`
 	IsHidden    bool           `json:"isHidden,omitempty"`
 	IsDeleted   bool           `json:"isDeleted,omitempty"`
-	CreatedAt   time.Time      `json:"createdAt,omitempty"`
-	ModifiedAt  time.Time      `json:"modifiedAt,omitempty"`
+	CreatedAt   time.Time      `json:"createdAt,omitzero"`
+	ModifiedAt  time.Time      `json:"modifiedAt,omitzero"`
 	MediaMeta   *MediaMeta     `json:"mediaMeta,omitempty"`
 }
 

@@ -2,10 +2,11 @@ package pixcall
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -515,9 +516,7 @@ func (r *Reader) buildDomainAsset(
 				if m.Extra == nil {
 					m.Extra = make(map[string]any)
 				}
-				for k, v := range med.Extra {
-					m.Extra[k] = v
-				}
+				maps.Copy(m.Extra, med.Extra)
 			}
 		}
 	}

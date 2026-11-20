@@ -3,13 +3,14 @@ package pixcall
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -550,8 +551,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	}
 
 	// Accumulate recursive folder stats bottom-up (orderedFolders is parent-before-child).
-	for i := len(orderedFolders) - 1; i >= 0; i-- {
-		fid := folderIDMap[orderedFolders[i].ID]
+	for _, orderedFolder := range slices.Backward(orderedFolders) {
+		fid := folderIDMap[orderedFolder.ID]
 		fm := folderModelsMap[fid]
 		if st := directStats[fid]; st != nil {
 			fm.FileCount += st.fileCount
@@ -1093,16 +1094,7 @@ func populateFileContentHashes(ctx context.Context, entries []model.Entry, targe
 		return nil
 	}
 
-	workers := runtime.GOMAXPROCS(0)
-	if workers < 1 {
-		workers = 1
-	}
-	if workers > 8 {
-		workers = 8
-	}
-	if workers > len(targets) {
-		workers = len(targets)
-	}
+	workers := min(min(max(runtime.GOMAXPROCS(0), 1), 8), len(targets))
 
 	hashes := make([]string, len(targets))
 	jobs := make(chan int, len(targets))
@@ -1117,10 +1109,8 @@ func populateFileContentHashes(ctx context.Context, entries []model.Entry, targe
 		firstErr error
 	)
 
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range workers {
+		wg.Go(func() {
 			for idx := range jobs {
 				if err := ctx.Err(); err != nil {
 					errOnce.Do(func() { firstErr = err })
@@ -1135,7 +1125,7 @@ func populateFileContentHashes(ctx context.Context, entries []model.Entry, targe
 				}
 				hashes[idx] = sum
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if firstErr != nil {
