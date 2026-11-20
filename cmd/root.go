@@ -43,6 +43,11 @@ var defaultEngine = func() *debris.Engine {
 	return debris.NewEngine(debris.WithRunner(engine.NewRunner(reg)))
 }
 
+// NewDefaultEngine constructs the default Debris Engine wired to all format adapters.
+func NewDefaultEngine() *debris.Engine {
+	return defaultEngine()
+}
+
 // NewRootCmd builds the root Debris CLI command wired to eng.
 func NewRootCmd(eng *debris.Engine) *cobra.Command {
 	if eng == nil {
