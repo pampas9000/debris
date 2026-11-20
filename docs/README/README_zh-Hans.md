@@ -4,7 +4,9 @@
 
 [English](../../README.md) | [繁體中文](README_zh-Hant.md)
 
-Debris 是一款跨平台命令行工具与桌面端 GUI 应用（基于 MyGo + SolidJS 构建），用于检查、规划和转换不同设计资产库格式。它通过统一的内部领域模型直接进行格式转换——无需借助中间格式即可保留文件夹、标签、标签组、颜色、评分、备注、来源链接以及素材文件。
+Debris 是一款跨平台桌面端 GUI 应用（基于 MyGo + SolidJS）与命令行工具，用于检查、规划和转换不同设计资产库格式。它通过统一的内部领域模型直接进行格式转换——无需借助中间格式即可保留文件夹、标签、标签组、颜色、评分、备注、来源链接以及素材文件。
+
+![Debris 桌面端界面](../assets/screenshot_zh-Hans.avif)
 
 ## 支持的格式
 
@@ -22,31 +24,37 @@ Debris 是一款跨平台命令行工具与桌面端 GUI 应用（基于 MyGo + 
 * **检查与转换规划：** 使用 `inspect` 查看素材库摘要；使用 `plan` 在实际转换前预览资产数量、警告信息以及潜在的兼容性损失。
 * **灵活的素材传输模式：** 支持 `auto`（默认，同磁盘优先硬链接，跨磁盘自动回退为复制）、`hardlink` 和 `copy`（`--copy-mode`），并提供 `--overwrite`、`--include-deleted`、`--include-hidden` 和 `--name` 等选项。
 * **脚本友好输出：** 支持 TTY 行内进度展示、`--quiet`（`-q`）静默进度，以及通过 `--json` 输出结构化 JSON / NDJSON 日志。
-* **跨平台兼容：** 基于 Go（`1.27+`）构建，支持 macOS、Linux 和 Windows。
 
-## 桌面端 GUI
+## 安装
 
-桌面端代码位于 [`gui/`](../../gui/)，使用 **MyGo** 与 **SolidJS**（Tailwind CSS v4 + TypeScript + Vite）开发。
+前往 **[GitHub Releases](https://github.com/pampas9000/debris/releases/latest)** 下载对应平台的预编译安装包或命令行程序：
 
-可在 Releases 页面直接下载预编译安装包（macOS `.dmg`、Windows 安装包 `.exe`、Linux `.deb` / `.rpm` / `.tar.gz`）。
+* **桌面端 GUI：**
+  * **macOS**（Universal 通用包，支持 Apple Silicon 与 Intel）：`Debris-*.dmg`
+  * **Windows**（`amd64` / `arm64`）：`Debris-*-setup-*.exe`
+  * **Linux**（`amd64` / `arm64`）：`.deb`、`.rpm` 或 `.tar.gz`
+* **命令行工具（`debris`）：**
+  * 下载对应平台的 `debris-<version>-<os>-<arch>.zip` 压缩包，解压后将 `debris` 放入 `PATH`；或通过 Go 直接安装：
+    ```sh
+    go install github.com/pampas9000/debris@latest
+    ```
 
-### 从源码运行与打包
+> [!TIP]
+> 在 macOS 上首次打开桌面端时，如系统提示“无法验证开发者”，可右键点击 `Debris.app` 选择**打开**（或在**系统设置 → 隐私与安全性**中允许运行）。
 
-需要安装 Go（`1.27+`）和 [Bun](https://bun.sh/)。
+## 桌面应用
 
-```sh
-cd gui
-bun install
+1. **选择源素材库：** 在**源素材库**卡片中点击**选择目录**，选中现有库目录（`.bf` / `.billfish`、`.library` 或 `.pixcall`）。Debris 会自动识别格式并展示资产数、文件夹数、标签数与总体积。
+2. **设置目标输出：** 选择**目标格式**（`Eagle` 或 `Pixcall`）、**保存位置**（父目录），并按需修改**目标库名称（文件夹名）**。
+3. **选择传输模式与迁移选项：**
+   * **自动**（推荐）：同磁盘优先创建硬链接节省空间，跨磁盘自动回退为复制。
+   * **硬链接**：不额外占用磁盘空间（要求源库与目标库位于同一磁盘）。
+   * **复制**：完整复制所有素材文件（跨盘最稳妥，会占用额外磁盘空间）。
+   * 按需勾选**覆盖已有目标目录**、**包含回收站项目**或**包含隐藏项目**。
+4. **预检与转换：** 点击**预检**可在写入磁盘前预览预计迁移数量及兼容性提示；确认无误后点击**开始转换**，转换过程中可随时点击**取消**中断。
+5. **主题与语言：** 可通过右上角控件切换**跟随系统 / 浅色模式 / 深色模式**及界面语言（**简体中文 / 繁體中文 / English**）。
 
-# 开发模式启动桌面应用
-bun run dev
-
-# 类型检查与打包桌面应用
-bun run typecheck
-bun run build
-```
-
-## CLI 用法
+## 命令行用法
 
 ### 转换素材库
 
@@ -66,7 +74,7 @@ debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink
 debris convert ./pixcall-lib -t eagle -q
 ```
 
-#### `convert` 参数
+**`convert` 参数：**
 
 * `--from`, `-f`：来源格式（`billfish`、`eagle`、`pixcall`），省略时自动探测。
 * `--to`, `-t`：目标格式（`eagle`、`pixcall`、`billfish`）。
@@ -87,7 +95,7 @@ debris inspect ./lib.library
 debris inspect -p ./pixcall-lib --json
 ```
 
-#### `inspect` 参数
+**`inspect` 参数：**
 
 * `--path`, `-p`：待检查的素材库路径（也可直接作为位置参数传入）。
 * `--format`, `-f`：来源格式（省略时自动探测）。
@@ -103,3 +111,52 @@ debris inspect -p ./pixcall-lib --json
 debris plan ./lib.billfish -t eagle
 debris plan -t pixcall -i ./lib.library -o ./pixcall-lib --json
 ```
+
+## 开发与构建
+
+### 环境依赖
+
+* **Go** `1.27+`
+* **[Bun](https://bun.sh/)**（仅开发或打包桌面端 GUI 时需要）
+
+### 项目结构
+
+* [`cmd/`](../../cmd/) — Cobra CLI 命令实现（`convert`、`inspect`、`plan`）
+* [`pkg/debris/`](../../pkg/debris/) — 对外暴露的 Go 引擎 API（`Engine`、`Probe`、`Inspect`、`Plan`、`Convert`）
+* [`internal/domain/`](../../internal/domain/) — 统一领域模型（`Library`、`Asset`、`Folder`、`Tag`）
+* [`internal/engine/`](../../internal/engine/) — 转换执行器、预检规划器与格式注册表
+* [`internal/format/`](../../internal/format/) — 各格式适配器（`eagle`、`pixcall`、`billfish`）
+* [`gui/`](../../gui/) — 基于 **MyGo** + **SolidJS** + **Tailwind CSS v4** + **Vite** 的桌面端 GUI
+
+### 构建与测试 CLI
+
+```sh
+# 运行全部 Go 测试
+go test ./...
+
+# 运行静态检查
+go vet ./...
+
+# 编译 CLI 二进制
+go build -o debris .
+```
+
+### 开发与打包桌面端 GUI
+
+```sh
+cd gui
+bun install
+
+# 开发模式启动桌面应用（支持前端热更新与 Go 后端联动）
+bun run dev
+
+# 前端类型检查
+bun run typecheck
+
+# 打包桌面端发行产物
+bun run build
+```
+
+### 作为 Go 库集成
+
+可通过 [`cmd.NewDefaultEngine()`](../../cmd/root.go)（或使用 [`pkg/debris`](../../pkg/debris/) 自定义注册适配器）在 Go 代码中直接调用 `Probe`、`Inspect`、`Plan` 与 `Convert`。

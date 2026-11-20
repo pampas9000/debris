@@ -4,7 +4,9 @@
 
 [简体中文](docs/README/README_zh-Hans.md) | [繁體中文](docs/README/README_zh-Hant.md)
 
-Debris is a cross-platform CLI tool and Desktop GUI application (powered by MyGo + SolidJS) for inspecting, planning, and converting design asset libraries across formats. It translates libraries directly through a unified domain model—preserving folders, tags, tag groups, colors, ratings, annotations, origin URLs, and asset files without needing an intermediate format.
+Debris is a cross-platform Desktop GUI (MyGo + SolidJS) and CLI tool for inspecting, planning, and converting design asset libraries across formats. It translates libraries directly through a unified domain model—preserving folders, tags, tag groups, colors, ratings, annotations, origin URLs, and asset files without needing an intermediate format.
+
+![Debris Desktop App](docs/assets/screenshot.avif)
 
 ## Supported Formats
 
@@ -22,35 +24,41 @@ Debris is a cross-platform CLI tool and Desktop GUI application (powered by MyGo
 * **Inspection & Pre-Flight Planning:** Use `inspect` to summarize a library and `plan` to preview asset counts, warnings, and potential compatibility losses before converting.
 * **Flexible Asset Transfer:** Supports `auto` (default, prefers hardlinks and falls back to copy across volumes), `hardlink`, and `copy` (`--copy-mode`), along with `--overwrite`, `--include-deleted`, `--include-hidden`, and `--name`.
 * **Script-Friendly Output:** Supports inline TTY progress, `--quiet` (`-q`), and machine-readable JSON / NDJSON output via `--json`.
-* **Cross-Platform:** Written in Go (`1.27+`) for macOS, Linux, and Windows.
 
-## Desktop GUI
+## Installation
 
-The desktop app lives in [`gui/`](gui/) and is built with **MyGo** and **SolidJS** (Tailwind CSS v4 + TypeScript + Vite).
+Download pre-built binaries and desktop installers from **[GitHub Releases](https://github.com/pampas9000/debris/releases/latest)**:
 
-Pre-built desktop packages (`.dmg` for macOS, installer `.exe` for Windows, and `.deb` / `.rpm` / `.tar.gz` for Linux) are available on the Releases page.
+* **Desktop GUI:**
+  * **macOS** (Universal Apple Silicon + Intel): `Debris-*.dmg`
+  * **Windows** (`amd64` / `arm64`): `Debris-*-setup-*.exe`
+  * **Linux** (`amd64` / `arm64`): `.deb`, `.rpm`, or `.tar.gz`
+* **CLI (`debris`):**
+  * Download the `debris-<version>-<os>-<arch>.zip` archive for your platform and add `debris` to your `PATH`, or install with Go:
+    ```sh
+    go install github.com/pampas9000/debris@latest
+    ```
 
-### Run & Build from Source
+> [!TIP]
+> On macOS, if Gatekeeper warns about an unidentified developer on first launch, right-click `Debris.app` and choose **Open** (or allow it in **System Settings → Privacy & Security**).
 
-Requires Go (`1.27+`) and [Bun](https://bun.sh/).
+## Desktop App
 
-```sh
-cd gui
-bun install
-
-# Start desktop app in development mode
-bun run dev
-
-# Typecheck & build desktop bundle
-bun run typecheck
-bun run build
-```
+1. **Select Source Library:** Click **Browse…** in **Source Library** and pick your existing library folder (`.bf` / `.billfish`, `.library`, or `.pixcall`). Debris automatically detects the format and displays asset, folder, tag, and size statistics.
+2. **Configure Target Output:** Choose the **Target Format** (`Eagle` or `Pixcall`), pick a **Save Location** (parent directory), and adjust the **Library Name (Folder)** if needed.
+3. **Choose Transfer Mode & Options:**
+   * **Auto** (recommended): Creates hardlinks on the same disk to save space, and automatically falls back to copying across different volumes.
+   * **Hardlink**: Zero extra disk usage (requires source and target on the same volume).
+   * **Copy**: Duplicates all asset files (safest across drives, uses additional disk space).
+   * Toggle **Overwrite target**, **Include trashed**, or **Include hidden** as needed.
+4. **Plan & Convert:** Click **Plan** to preview projected counts and any compatibility notes/losses before touching disk, then click **Convert** to start. You can cancel a running conversion at any time.
+5. **Theme & Language:** Use the top-right controls to switch between **System / Light / Dark** themes and **English / 简体中文 / 繁體中文**.
 
 ## CLI Usage
 
 ### Convert a Library
 
-`debris convert [input] [output]` accepts positional arguments as well as flags. If `[output]` / `--output` is omitted, Debris derives it automatically from the input path and `--to` (e.g., `./lib.billfish` with `-t eagle` → `./lib.library`).
+`debris convert [input] [output]` accepts both positional arguments and flags. If `[output]` / `--output` is omitted, Debris derives it automatically from the input path and `--to` (e.g., `./lib.billfish` with `-t eagle` → `./lib.library`).
 
 ```sh
 # Convert Billfish to Eagle using positional arguments
@@ -66,7 +74,7 @@ debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink
 debris convert ./pixcall-lib -t eagle -q
 ```
 
-#### `convert` Flags
+**`convert` Flags:**
 
 * `--from`, `-f`: Source format (`billfish`, `eagle`, `pixcall`). Auto-detected if omitted.
 * `--to`, `-t`: Destination format (`eagle`, `pixcall`, `billfish`).
@@ -87,7 +95,7 @@ debris inspect ./lib.library
 debris inspect -p ./pixcall-lib --json
 ```
 
-#### `inspect` Flags
+**`inspect` Flags:**
 
 * `--path`, `-p`: Library path to inspect (can also be passed as a positional argument).
 * `--format`, `-f`: Source format (auto-detected if omitted).
@@ -103,3 +111,52 @@ debris inspect -p ./pixcall-lib --json
 debris plan ./lib.billfish -t eagle
 debris plan -t pixcall -i ./lib.library -o ./pixcall-lib --json
 ```
+
+## Development
+
+### Prerequisites
+
+* **Go** `1.27+`
+* **[Bun](https://bun.sh/)** (required only for building/running the Desktop GUI)
+
+### Project Structure
+
+* [`cmd/`](cmd/) — Cobra CLI commands (`convert`, `inspect`, `plan`)
+* [`pkg/debris/`](pkg/debris/) — Public Go Engine API (`Engine`, `Probe`, `Inspect`, `Plan`, `Convert`)
+* [`internal/domain/`](internal/domain/) — Unified domain model (`Library`, `Asset`, `Folder`, `Tag`)
+* [`internal/engine/`](internal/engine/) — Conversion runner, pre-flight planner, and format registry
+* [`internal/format/`](internal/format/) — Format adapters (`eagle`, `pixcall`, `billfish`)
+* [`gui/`](gui/) — Desktop GUI built with **MyGo** + **SolidJS** + **Tailwind CSS v4** + **Vite**
+
+### Build & Test CLI
+
+```sh
+# Run all Go tests
+go test ./...
+
+# Run static checks
+go vet ./...
+
+# Build CLI binary
+go build -o debris .
+```
+
+### Develop & Build Desktop GUI
+
+```sh
+cd gui
+bun install
+
+# Start desktop app in development mode (hot-reload frontend + Go backend)
+bun run dev
+
+# Typecheck frontend
+bun run typecheck
+
+# Build production desktop bundle
+bun run build
+```
+
+### Embedding Debris as a Go Library
+
+Use [`cmd.NewDefaultEngine()`](cmd/root.go) (or wire custom adapters via [`pkg/debris`](pkg/debris/)) to call `Probe`, `Inspect`, `Plan`, and `Convert` directly from Go code.
