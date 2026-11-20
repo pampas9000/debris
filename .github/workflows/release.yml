@@ -119,4 +119,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -lh desktop-artifacts
-          gh release upload "${GITHUB_REF_NAME}" desktop-artifacts/* --clobber
+          gh release upload "${GITHUB_REF_NAME}" desktop-artifacts/* --repo "${GITHUB_REPOSITORY}" --clobber
