@@ -22,8 +22,8 @@ func newInspectCmd(eng *debris.Engine) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "inspect [path]",
 		Short: "Inspect a library and summarize its contents",
-		Example: `  debris inspect --path ./lib.library
-  debris inspect -p ./lib.billfish --format billfish --json`,
+		Example: `  debris inspect ./lib.library
+  debris inspect -p ./lib.billfish -f billfish --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -36,16 +36,21 @@ func newInspectCmd(eng *debris.Engine) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Path, "path", "p", "", "Library path to inspect")
-	flags.StringVar(&opts.Format, "format", "", "Source format (auto-detected if omitted)")
+	flags.StringVarP(&opts.Format, "format", "f", "", "Source format (auto-detected if omitted)")
 	flags.BoolVar(&opts.IncludeDeleted, "include-deleted", false, "Include deleted/trashed items")
 	flags.BoolVar(&opts.IncludeHidden, "include-hidden", false, "Include hidden items")
 	flags.BoolVar(&opts.JSON, "json", false, "Output inspection result as JSON")
+	registerFormatFlagCompletion(cmd, "format", eng)
 
 	return cmd
 }
 
 func executeInspect(cmd *cobra.Command, eng *debris.Engine, opts inspectOptions) error {
 	out := cmd.OutOrStdout()
+	if opts.JSON {
+		cmd.SilenceErrors = true
+	}
+
 	resp, err := eng.Inspect(commandContext(cmd), debris.InspectRequest{
 		Path:           opts.Path,
 		Format:         opts.Format,
@@ -81,7 +86,7 @@ func executeInspect(cmd *cobra.Command, eng *debris.Engine, opts inspectOptions)
 	if resp.HiddenCount > 0 {
 		_, _ = fmt.Fprintf(out, "Hidden:     %d\n", resp.HiddenCount)
 	}
-	_, _ = fmt.Fprintf(out, "TotalBytes: %d\n", resp.TotalBytes)
+	_, _ = fmt.Fprintf(out, "TotalBytes: %s\n", formatBytes(resp.TotalBytes))
 	for _, w := range resp.Warnings {
 		_, _ = fmt.Fprintf(out, "Warning:    %s\n", w)
 	}

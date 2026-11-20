@@ -384,3 +384,83 @@ func TestDefaultEngineFormats(t *testing.T) {
 		}
 	}
 }
+
+func TestPositionalArgsAndDerivedOutput(t *testing.T) {
+	runner := &mockRunner{}
+
+	// convert with 1 positional arg derives output path
+	_, _, err := runCLI(runner, "convert", "./libs/sample.billfish", "-t", "eagle")
+	if err != nil {
+		t.Fatalf("convert positional 1 arg failed: %v", err)
+	}
+	if runner.lastConvert.InputPath != "./libs/sample.billfish" {
+		t.Fatalf("unexpected InputPath: %q", runner.lastConvert.InputPath)
+	}
+	if runner.lastConvert.OutputPath != "libs/sample.library" {
+		t.Fatalf("unexpected derived OutputPath: %q", runner.lastConvert.OutputPath)
+	}
+
+	// plan with 2 positional args
+	_, _, err = runCLI(runner, "plan", "./in.library", "./out.pixcall", "-t", "pixcall")
+	if err != nil {
+		t.Fatalf("plan positional 2 args failed: %v", err)
+	}
+	if runner.lastPlan.InputPath != "./in.library" || runner.lastPlan.OutputPath != "./out.pixcall" {
+		t.Fatalf("unexpected plan paths: %+v", runner.lastPlan)
+	}
+
+	// same-format derivation avoids colliding with input path
+	if got := defaultOutputPath("./my.library", "eagle"); got != "my-eagle.library" {
+		t.Fatalf("expected collision-safe derived path, got %q", got)
+	}
+}
+
+func TestRootVersionFlag(t *testing.T) {
+	runner := &mockRunner{}
+	stdout, _, err := runCLI(runner, "--version")
+	if err != nil {
+		t.Fatalf("--version failed: %v", err)
+	}
+	if !strings.Contains(stdout, "debris version") {
+		t.Fatalf("unexpected --version output: %q", stdout)
+	}
+}
+
+func TestConvertQuietAndJSONStderrSilence(t *testing.T) {
+	runner := &mockRunner{
+		convertEmit: []debris.Event{
+			{Kind: "stage", Stage: "read"},
+			{Kind: "progress", Stage: "copy", Current: 1, Total: 2, AssetID: "asset-1"},
+			{Kind: "warning", Message: "keep me"},
+		},
+	}
+	stdout, _, err := runCLI(runner, "convert", "./in.bf", "./out.library", "-t", "eagle", "-q")
+	if err != nil {
+		t.Fatalf("convert -q failed: %v", err)
+	}
+	if strings.Contains(stdout, "[stage]") || strings.Contains(stdout, "[progress]") {
+		t.Fatalf("expected quiet mode to suppress stage/progress, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "[warning] keep me") || !strings.Contains(stdout, "4.0 KiB (4096 B)") {
+		t.Fatalf("expected warning and humanized bytes in output, got:\n%s", stdout)
+	}
+
+	errRunner := &mockRunner{
+		inspectErr: debris.NewError(debris.CodeNotFound, "missing", "/missing"),
+		planErr:    debris.NewError(debris.CodeNotFound, "missing", "/missing"),
+		convertErr: debris.NewError(debris.CodeNotFound, "missing", "/missing"),
+	}
+	for _, args := range [][]string{
+		{"inspect", "/missing", "--json"},
+		{"plan", "/missing", "/out", "-t", "eagle", "--json"},
+		{"convert", "/missing", "/out", "-t", "eagle", "--json"},
+	} {
+		_, stderr, err := runCLI(errRunner, args...)
+		if err == nil {
+			t.Fatalf("expected error for %v", args)
+		}
+		if stderr != "" {
+			t.Fatalf("expected empty stderr in --json mode for %v, got %q", args, stderr)
+		}
+	}
+}

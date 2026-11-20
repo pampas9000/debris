@@ -10,20 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type convertOptions struct {
-	From           string
-	To             string
-	InputPath      string
-	OutputPath     string
-	CopyMode       string
-	DryRun         bool
-	Overwrite      bool
-	IncludeDeleted bool
-	IncludeHidden  bool
-	LibraryName    string
-	JSON           bool
-}
-
 // ConvertNDJSONLine represents a single NDJSON line emitted by `debris convert --json`.
 type ConvertNDJSONLine struct {
 	Type   string                  `json:"type"`
@@ -32,52 +18,25 @@ type ConvertNDJSONLine struct {
 	Error  *debris.Error           `json:"error,omitempty"`
 }
 
-var convertFlagNames = []string{
-	"from",
-	"to",
-	"input",
-	"output",
-	"copy-mode",
-	"dry-run",
-	"overwrite",
-	"include-deleted",
-	"include-hidden",
-	"name",
-	"json",
-}
-
 func newConvertCmd(eng *debris.Engine) *cobra.Command {
-	var opts convertOptions
+	var opts transferOptions
 
 	cmd := &cobra.Command{
-		Use:   "convert",
+		Use:   "convert [input] [output]",
 		Short: "Convert a library from one format to another",
-		Example: `  debris convert --from billfish --to eagle --input ./lib.billfish --output ./lib.library
+		Example: `  debris convert ./lib.billfish ./lib.library -t eagle
+  debris convert ./lib.billfish -t pixcall
   debris convert -t pixcall -i ./lib.billfish -o ./pixcall-lib --copy-mode hardlink --json`,
-		Args: cobra.NoArgs,
+		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			applyPositionalInputOutput(&opts, args)
 			return executeConvert(cmd, eng, opts)
 		},
 	}
 
-	bindConvertFlags(cmd, &opts)
+	bindTransferFlags(cmd, &opts, eng, true)
 	return cmd
-}
-
-func bindConvertFlags(cmd *cobra.Command, opts *convertOptions) {
-	flags := cmd.Flags()
-	flags.StringVarP(&opts.From, "from", "f", "", "Source format (auto-detected if omitted)")
-	flags.StringVarP(&opts.To, "to", "t", "", "Destination format (e.g., eagle, pixcall, billfish)")
-	flags.StringVarP(&opts.InputPath, "input", "i", "", "Input library path")
-	flags.StringVarP(&opts.OutputPath, "output", "o", "", "Output library path")
-	flags.StringVar(&opts.CopyMode, "copy-mode", string(debris.CopyModeAuto), "Asset transfer mode: copy, hardlink, or auto")
-	flags.BoolVar(&opts.DryRun, "dry-run", false, "Validate and plan without writing target files")
-	flags.BoolVar(&opts.Overwrite, "overwrite", false, "Overwrite existing target directory contents")
-	flags.BoolVar(&opts.IncludeDeleted, "include-deleted", false, "Include deleted/trashed items")
-	flags.BoolVar(&opts.IncludeHidden, "include-hidden", false, "Include hidden items")
-	flags.StringVar(&opts.LibraryName, "name", "", "Override target library name")
-	flags.BoolVar(&opts.JSON, "json", false, "Emit NDJSON progress events and final result")
 }
 
 func hasAnyConvertFlagChanged(cmd *cobra.Command) bool {
@@ -90,7 +49,7 @@ func hasAnyConvertFlagChanged(cmd *cobra.Command) bool {
 	return false
 }
 
-func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts convertOptions) error {
+func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts transferOptions) error {
 	req := debris.ConvertRequest{
 		From:           opts.From,
 		To:             opts.To,
@@ -107,6 +66,7 @@ func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts convertOptions)
 	out := cmd.OutOrStdout()
 
 	if opts.JSON {
+		cmd.SilenceErrors = true
 		var mu sync.Mutex
 		enc := json.NewEncoder(out)
 		enc.SetEscapeHTML(false)
@@ -137,25 +97,55 @@ func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts convertOptions)
 		return nil
 	}
 
+	isTTY := isTerminalWriter(out)
 	var mu sync.Mutex
+	var inlineProgressActive bool
+	var lastPercentLogged int64 = -1
+
+	clearInlineProgress := func() {
+		if inlineProgressActive {
+			_, _ = fmt.Fprint(out, "\r\x1b[K")
+			inlineProgressActive = false
+		}
+	}
+
 	resp, err := eng.Convert(commandContext(cmd), req, func(ev debris.Event) {
+		if opts.Quiet && ev.Kind != "warning" {
+			return
+		}
 		mu.Lock()
 		defer mu.Unlock()
 		switch ev.Kind {
 		case "stage":
+			clearInlineProgress()
 			if ev.Message != "" {
 				_, _ = fmt.Fprintf(out, "[stage] %s: %s\n", ev.Stage, ev.Message)
 			} else if ev.Stage != "" {
 				_, _ = fmt.Fprintf(out, "[stage] %s\n", ev.Stage)
 			}
 		case "warning":
+			clearInlineProgress()
 			_, _ = fmt.Fprintf(out, "[warning] %s\n", ev.Message)
 		case "progress":
-			if ev.Total > 0 {
-				_, _ = fmt.Fprintf(out, "[progress] %d/%d %s\n", ev.Current, ev.Total, ev.AssetID)
+			if ev.Total <= 0 {
+				return
 			}
+			pct := (ev.Current * 100) / ev.Total
+			if isTTY {
+				_, _ = fmt.Fprintf(out, "\r\x1b[K[progress] %d/%d (%d%%) %s", ev.Current, ev.Total, pct, ev.AssetID)
+				inlineProgressActive = true
+				return
+			}
+			if ev.Total > 50 && ev.Current < ev.Total && pct/5 == lastPercentLogged/5 {
+				return
+			}
+			lastPercentLogged = pct
+			_, _ = fmt.Fprintf(out, "[progress] %d/%d %s\n", ev.Current, ev.Total, ev.AssetID)
 		}
 	})
+	mu.Lock()
+	clearInlineProgress()
+	mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -169,7 +159,7 @@ func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts convertOptions)
 	_, _ = fmt.Fprintf(out, "Tags:       %d\n", resp.TagCount)
 	_, _ = fmt.Fprintf(out, "Assets:     %d (copied=%d, hardlinked=%d, skipped=%d)\n",
 		resp.AssetCount, resp.CopiedAssets, resp.HardlinkedAssets, resp.SkippedAssets)
-	_, _ = fmt.Fprintf(out, "TotalBytes: %d\n", resp.TotalBytes)
+	_, _ = fmt.Fprintf(out, "TotalBytes: %s\n", formatBytes(resp.TotalBytes))
 	_, _ = fmt.Fprintf(out, "DurationMs: %d\n", resp.DurationMs)
 	for _, w := range resp.Warnings {
 		_, _ = fmt.Fprintf(out, "Warning:    %s\n", w)

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -16,6 +17,20 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// Build metadata injected via GoReleaser / -ldflags.
+var (
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+)
+
+func versionString() string {
+	if Commit == "" || Commit == "none" {
+		return Version
+	}
+	return fmt.Sprintf("%s (commit %s, built %s)", Version, Commit, Date)
+}
 
 // defaultEngine constructs the default Debris Engine wired to all format adapters.
 var defaultEngine = func() *debris.Engine {
@@ -33,16 +48,17 @@ func NewRootCmd(eng *debris.Engine) *cobra.Command {
 		eng = defaultEngine()
 	}
 
-	var rootConvertOpts convertOptions
+	var rootConvertOpts transferOptions
 
 	rootCmd := &cobra.Command{
-		Use:   "debris",
-		Short: "Convert and inspect design asset libraries across formats",
-		Long:  "Debris inspects, plans, and converts design asset libraries between formats such as Billfish, Eagle, and Pixcall.",
-		Example: `  debris --from billfish --to eagle --input ./lib.billfish --output ./lib.library
-  debris convert -f billfish -t pixcall -i ./lib.billfish -o ./pixcall-lib --json
-  debris inspect --path ./lib.library --json
-  debris plan --to eagle --input ./lib.billfish --output ./lib.library
+		Use:     "debris",
+		Short:   "Convert and inspect design asset libraries across formats",
+		Long:    "Debris inspects, plans, and converts design asset libraries between formats such as Billfish, Eagle, and Pixcall.",
+		Version: versionString(),
+		Example: `  debris convert ./lib.billfish ./lib.library -t eagle
+  debris convert ./lib.billfish -t pixcall --json
+  debris inspect ./lib.library --json
+  debris plan ./lib.billfish -t eagle
   debris protocol`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,11 +66,15 @@ func NewRootCmd(eng *debris.Engine) *cobra.Command {
 				return cmd.Help()
 			}
 			cmd.SilenceUsage = true
+			applyPositionalInputOutput(&rootConvertOpts, nil)
 			return executeConvert(cmd, eng, rootConvertOpts)
 		},
 	}
 
-	bindConvertFlags(rootCmd, &rootConvertOpts)
+	bindTransferFlags(rootCmd, &rootConvertOpts, eng, true)
+	for _, name := range convertFlagNames {
+		_ = rootCmd.Flags().MarkHidden(name)
+	}
 
 	rootCmd.AddCommand(
 		newConvertCmd(eng),

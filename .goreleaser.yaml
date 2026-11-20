@@ -16,6 +16,9 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -s -w
+      - -X debris/cmd.Version={{.Version}}
+      - -X debris/cmd.Commit={{.ShortCommit}}
+      - -X debris/cmd.Date={{.Date}}
     goos:
       - linux
       - windows
