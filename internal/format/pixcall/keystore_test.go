@@ -332,3 +332,60 @@ func TestPixcallContentHashMatchesSampleLibrary(t *testing.T) {
 		}
 	}
 }
+
+func TestPixcallWriterOrdersEntryIDsByCreatedAt(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mkFile := func(name string) string {
+		p := filepath.Join(srcDir, name)
+		if err := os.WriteFile(p, []byte("data:"+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	tOld := time.Date(2020, 6, 16, 8, 52, 16, 0, time.UTC)
+	tMid := time.Date(2023, 11, 18, 10, 2, 29, 0, time.UTC)
+	tNew := time.Date(2026, 5, 1, 17, 55, 5, 0, time.UTC)
+
+	lib := &domain.Library{
+		Name: "ordered-ids",
+		Assets: []*domain.Asset{
+			{ID: "a-mid", Name: "mid", FileName: "mid.png", Ext: "png", Kind: domain.KindImage, SourcePath: mkFile("mid.png"), CreatedAt: tMid, ModifiedAt: tMid},
+			{ID: "a-new", Name: "new", FileName: "new.png", Ext: "png", Kind: domain.KindImage, SourcePath: mkFile("new.png"), CreatedAt: tNew, ModifiedAt: tNew},
+			{ID: "a-old", Name: "old", FileName: "old.png", Ext: "png", Kind: domain.KindImage, SourcePath: mkFile("old.png"), CreatedAt: tOld, ModifiedAt: tOld},
+		},
+	}
+
+	outDir := filepath.Join(tmpDir, "out.pixcall")
+	adapter := New()
+	w, err := adapter.OpenWriter(context.Background(), outDir, format.WriteOptions{CopyMode: format.CopyModeCopy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(context.Background(), lib, nil); err != nil {
+		_ = w.Close()
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	mainDB, closer, err := kit.OpenReadOnly(filepath.Join(outDir, ".pixcall", "database", "main.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closer.Close()
+
+	var names []string
+	if err := mainDB.Raw("SELECT name FROM entries WHERE kind = 1 ORDER BY id DESC").Scan(&names).Error; err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"new.png", "mid.png", "old.png"}
+	if len(names) != len(want) || names[0] != want[0] || names[1] != want[1] || names[2] != want[2] {
+		t.Fatalf("entries ordered by id DESC = %v, want %v", names, want)
+	}
+}

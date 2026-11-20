@@ -1,8 +1,10 @@
 package kit
 
 import (
+	"cmp"
 	"crypto/rand"
 	"os"
+	"slices"
 	"sync"
 	"time"
 )
@@ -13,7 +15,7 @@ const (
 	eagleCharsetN = byte(len(eagleCharset)) // 36
 	eagleMaxValid = 252                     // largest multiple of 36 <= 255 for rejection sampling
 
-	snowflakeEpochMs int64 = 1577836800000 // 2020-01-01T00:00:00Z
+	snowflakeEpochMs int64 = 1636629071000 // 2021-11-11T11:11:11Z (Pixcall Snowflake epoch)
 	workerBits       uint8 = 10
 	seqBits          uint8 = 12
 	maxWorkerID      int64 = (1 << workerBits) - 1
@@ -107,4 +109,63 @@ func (g *snowflakeGenerator) Next() int64 {
 	}
 
 	return (g.lastMs << (workerBits + seqBits)) | (g.workerID << seqBits) | g.seq
+}
+
+// AssignSnowflakeIDs assigns unique, positive 64-bit Snowflake IDs for each
+// timestamp in times such that ID order matches chronological timestamp order.
+// Timestamps at or before Pixcall's Snowflake epoch are ordered in [1000, 1<<22)
+// so they remain above reserved root IDs (1, 2) and strictly below all post-epoch IDs.
+func AssignSnowflakeIDs(times []time.Time) []int64 {
+	if len(times) == 0 {
+		return nil
+	}
+
+	type indexedTime struct {
+		idx int
+		ms  int64
+	}
+	items := make([]indexedTime, len(times))
+	for i, t := range times {
+		items[i] = indexedTime{idx: i, ms: t.UnixMilli()}
+	}
+	slices.SortFunc(items, func(a, b indexedTime) int {
+		if c := cmp.Compare(a.ms, b.ms); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.idx, b.idx)
+	})
+
+	// Flip bit 0 so workerID is disjoint from defaultSnowflake.workerID used by NewSnowflakeID.
+	workerID := defaultSnowflake.workerID ^ 1
+	const preEpochLimit = int64(1) << (workerBits + seqBits)
+	preEpochID := int64(1000)
+
+	ids := make([]int64, len(times))
+	var lastMs int64
+	var seq int64
+
+	for _, item := range items {
+		offsetMs := item.ms - snowflakeEpochMs
+		if offsetMs <= 0 && preEpochID < preEpochLimit {
+			ids[item.idx] = preEpochID
+			preEpochID++
+			continue
+		}
+		if offsetMs < 1 {
+			offsetMs = 1
+		}
+		if offsetMs > lastMs {
+			lastMs = offsetMs
+			seq = 0
+		} else {
+			seq++
+			if seq > maxSeq {
+				lastMs++
+				seq = 0
+			}
+		}
+		ids[item.idx] = (lastMs << (workerBits + seqBits)) | (workerID << seqBits) | seq
+	}
+
+	return ids
 }

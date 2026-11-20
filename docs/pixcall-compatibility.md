@@ -38,3 +38,20 @@ Pixcall 桌面端校验与打开素材库时（`ValidateLibrary` / `open_metadat
   - Pixcall 打开素材库时，会并发启动 `FS scan` 与 `CheckEntryState` 后台任务读写 `main.db`。
   - 如果导入阶段留空 `inode = NULL`、`content_hash = NULL` 且 `status = 0`，`FS scan` 会对全部文件逐条发起 `UPDATE entries` 事务（`FS scan update with no inode file` / `FS scan update file content`），与同时在写元数据、缩略图和色板的 `CheckEntryState` 抢占 SQLite 写锁，在大库下直接触发 `Diesel(DatabaseError(Unknown, "database is locked"))`，导致部分条目失败后永久卡在 `status = 0`、`content_hash = NULL` 且界面裂图（仅“在访达中显示”正常）。
   - 由 `debris` 在导出时直接计算真实的 4 MiB 分块 SHA-256，并从目标磁盘路径写入真实 `inode`、磁盘 `mtime`（毫秒时间戳）及 `status = 1`（文件夹保持 `status = 64`），`FS scan` 扫描时即可判定全部文件与磁盘一致从而零写锁冲突，`CheckEntryState` 只需平稳补齐元数据与 `thumbs.db` 缩略图并推进到 `status = 2069`。
+
+## 4. Snowflake 主键 `id` 的纪元与按 `created_at` 生成（导入时间排序）
+
+**原因**：
+
+- Pixcall 桌面端的「导入时间」排序实际上直接按主键 `entries.id`（64 位 Snowflake 整数）排序，而不是按 `entries.created_at` 字段排序。
+- Pixcall 原生使用的 Snowflake 基准纪元为 **`2021-11-11T11:11:11Z`（`1636629071000` ms）**，高 41 位为相对该纪元的毫秒偏移，低 22 位为 `workerID (10 bit) | seq (12 bit)`。
+- 如果 `debris` 生成 `entries.id` 时没有对齐这一机制，会出现两类排序异常：
+  1. **纪元不一致**：若使用更早的纪元（如 `2020-01-01T00:00:00Z`），转换出的历史条目 `id` 数值会整体大于 Pixcall 后续正常导入生成的 `id`，导致新导入的素材在「导入时间降序」下反而排在历史迁移素材之后；
+  2. **按遍历顺序使用 `time.Now()` 生成**：会导致 `entries.id` 反映的是导入扫描顺序而非资产原本的 `created_at`，迁移库内的历史素材在按「导入时间」排序时完全乱序。
+
+**约定**（见 [idgen.go](../internal/kit/idgen.go) 与 [writer.go](../internal/format/pixcall/writer.go)）：
+
+- `snowflakeEpochMs` 统一使用 Pixcall 原生纪元 `1636629071000`（`2021-11-11T11:11:11Z`）。
+- 写入资产条目时，通过 `kit.AssignSnowflakeIDs` 依据每个资产的 `CreatedAt`（零值回退为当前时间）按时间升序生成 `entries.id`，保证 `id` 顺序与 `created_at` 严格一致，并与 Pixcall 后续新导入条目的 `id` 处于同一时间轴。
+- 对于早于或等于 `2021-11-11T11:11:11Z` 的历史时间戳，按时间升序映射到 `[1000, 1<<22)` 区间，既避开根目录/回收站保留 ID（`1`、`2`），又保证严格小于所有纪元后的 ID。
+- `AssignSnowflakeIDs` 使用与 `NewSnowflakeID()` 互斥的 `workerID`（翻转 bit 0），避免与文件夹、标签等条目发生主键冲突。

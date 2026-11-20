@@ -336,6 +336,16 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	var hashTargets []fileHashTarget
 	totalAssets := int64(len(lib.Assets))
 
+	assetTimes := make([]time.Time, len(lib.Assets))
+	for i, a := range lib.Assets {
+		if a.CreatedAt.IsZero() {
+			assetTimes[i] = now
+		} else {
+			assetTimes[i] = a.CreatedAt
+		}
+	}
+	assetEntryIDs := kit.AssignSnowflakeIDs(assetTimes)
+
 	for idx, a := range lib.Assets {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -436,7 +446,7 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			CopyMode: usedMode,
 		})
 
-		entryID := kit.NewSnowflakeID()
+		entryID := assetEntryIDs[idx]
 		if a.ID != "" {
 			assetIDMap[a.ID] = entryID
 		}

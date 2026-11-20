@@ -3,6 +3,7 @@ package kit
 import (
 	"sync"
 	"testing"
+	"time"
 )
 
 func isEagleChar(b byte) bool {
@@ -112,5 +113,37 @@ func TestNewSnowflakeID_MonotonicAndUniqueUnderConcurrency(t *testing.T) {
 			}
 			seen[id] = struct{}{}
 		}
+	}
+}
+
+func TestAssignSnowflakeIDs_ChronologicalOrder(t *testing.T) {
+	t0 := time.Date(2020, 6, 16, 8, 52, 16, 0, time.UTC)  // pre-epoch
+	t1 := time.Date(2021, 11, 11, 11, 11, 11, 0, time.UTC) // exact epoch
+	t2 := time.Date(2023, 11, 18, 10, 2, 29, 0, time.UTC)
+	t3 := time.Date(2024, 1, 24, 16, 5, 53, 0, time.UTC)
+	t4 := time.Date(2026, 11, 20, 14, 35, 46, 0, time.UTC)
+
+	// Pass timestamps in scrambled order, including a duplicate.
+	times := []time.Time{t3, t0, t4, t2, t2, t1}
+	ids := AssignSnowflakeIDs(times)
+	if len(ids) != len(times) {
+		t.Fatalf("len(ids) = %d, want %d", len(ids), len(times))
+	}
+
+	// Expected relative order by timestamp (and original index for ties):
+	// t0 (idx 1) < t1 (idx 5) < t2 (idx 3) < t2 (idx 4) < t3 (idx 0) < t4 (idx 2)
+	order := []int{1, 5, 3, 4, 0, 2}
+	for i := 1; i < len(order); i++ {
+		prev := ids[order[i-1]]
+		curr := ids[order[i]]
+		if prev >= curr {
+			t.Fatalf("ID order mismatch at rank %d: id[%d]=%d >= id[%d]=%d", i, order[i-1], prev, order[i], curr)
+		}
+	}
+	if ids[1] < 1000 {
+		t.Fatalf("pre-epoch ID %d should be >= 1000", ids[1])
+	}
+	if ids[2] >= 700_000_000_000_000_000 || ids[2] < 600_000_000_000_000_000 {
+		t.Fatalf("2026-11-20 ID %d out of expected Pixcall epoch range [6e17, 7e17)", ids[2])
 	}
 }
