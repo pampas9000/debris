@@ -285,7 +285,7 @@ export default function App() {
     setResult(null);
     setProgress((s) => {
       s.running = true;
-      s.stage = t("progressTitle");
+      s.stage = "";
       s.current = 0;
       s.total = 0;
       s.warnings = [];
@@ -689,14 +689,14 @@ export default function App() {
                     <ul class="flex flex-col gap-1.5">
                       <For each={plan().warnings}>
                         {(w) => {
-                          const notice = formatPlanNotice(w);
+                          const notice = () => formatPlanNotice(w);
                           return (
                             <li>
-                              <Alert variant={notice.kind === "info" ? "default" : "warning"}>
-                                <Show when={notice.kind === "info"} fallback={<Icon icon={TriangleAlert} class="mt-0.5" />}>
+                              <Alert variant={notice().kind === "info" ? "default" : "warning"}>
+                                <Show when={notice().kind === "info"} fallback={<Icon icon={TriangleAlert} class="mt-0.5" />}>
                                   <Icon icon={Info} class="mt-0.5 text-muted-foreground" />
                                 </Show>
-                                <span>{notice.text}</span>
+                                <span>{notice().text}</span>
                               </Alert>
                             </li>
                           );
