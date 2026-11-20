@@ -2,40 +2,76 @@
 
 **弥合设计库格式之间的鸿沟。**
 
-Debris 是一款跨平台命令行工具，旨在通过在不同的设计库管理应用程序之间实现**双向设计库转换**，从而简化您的设计工作流程。告别与不兼容的库格式作斗争，无缝地在各个平台之间迁移您宝贵的设计资产。
+[English](../../README.md) | [繁體中文](README_zh-Hant.md)
 
-目前，Debris 专注于 **Billfish 和 Pixcall** 库之间的转换，并利用 Eagle 格式作为中间格式。未来的开发将扩展对更多 EDA 格式和直接转换方法的支持。
+Debris 是一款跨平台命令行工具（同时提供 JSON-RPC 2.0 stdio 服务），用于检查、规划和转换不同设计资产库格式。它通过统一的内部领域模型直接进行格式转换——无需借助中间格式即可保留文件夹、标签、标签组、颜色、评分、备注、来源链接以及素材文件。
 
-> **🚧  正在进行中 - 早期开发阶段 🚧**
->
-> 请注意，Debris 目前正处于积极开发阶段，**尚未准备好用于生产环境。** 虽然 Billfish 和 Pixcall 库之间（通过 Eagle 作为中间格式）的转换功能已实现，但预计仍可能存在潜在问题和局限性。我们感谢您早期的关注，并鼓励您为它的开发做出贡献！
+## 支持的格式
 
-## 功能
+| 格式 | 读取（导入） | 写入（导出） | 说明 |
+| :--- | :---: | :---: | :--- |
+| **Eagle** (`.library`, 4.x) | ✅ | ✅ | 已测试验证可用（含 Hive 兼容） |
+| **Pixcall** (`.pixcall`, v22) | ✅ | ✅ | 已测试验证可用（详见 [Pixcall 兼容说明](../pixcall-compatibility.md)） |
+| **Billfish** (`.bf`) | ✅ | ⚠️ 不再维护 | 支持从 Billfish 迁出。由于 Billfish 已停止更新与维护，导出为 Billfish 不再积极维护。 |
 
-**当前支持：**
+## 功能特性
 
-* **Billfish ↔ Pixcall 转换（通过 Eagle）：** 将 Billfish 库转换为 Pixcall 库，反之亦然，使用 Eagle 格式作为桥梁。 这使您能够在两个流行的 EDA 工具之间使用库。
-* **命令行界面 (CLI)：** 简单直观的命令行界面，易于集成到您的脚本和工作流程中。
-* **跨平台兼容性：** 借助 Go 编程语言的跨平台兼容性，Debris 可以在主要的操作系统（macOS、Linux、Windows）上运行。
+* **跨格式直接转换：** 在支持的格式之间直接转换（例如 `billfish` → `eagle`、`billfish` → `pixcall`、`eagle` ↔ `pixcall`）。
+* **来源格式自动识别：** 省略 `--from` / `--format` 时，Debris 会自动探测输入素材库的格式。
+* **检查与转换规划：** 使用 `inspect` 查看素材库摘要；使用 `plan` 在实际转换前预览资产数量、警告信息以及潜在的兼容性损失。
+* **灵活的素材传输模式：** 支持 `copy`、`hardlink` 和 `auto`（`--copy-mode`），并提供 `--dry-run`、`--overwrite`、`--include-deleted`、`--include-hidden` 和 `--name` 等选项。
+* **自动化与协议集成：** 通过 `--json` 输出 NDJSON 进度事件与最终结果，或通过 `debris protocol` 启动无状态的 JSON-RPC 2.0 stdio 服务。
+* **跨平台兼容：** 基于 Go（`1.23+`）构建，支持 macOS、Linux 和 Windows。
 
 ## 用法
 
-Debris 通过命令行使用。
+### 转换素材库
 
-您需要指定输入和输出格式，以及输入和输出路径。
+```sh
+# 将 Billfish 素材库转换为 Eagle 素材库
+debris convert --from billfish --to eagle --input ./lib.billfish --output ./lib.library
 
-示例：将 Billfish 库转换为 Eagle 库
+# 将 Billfish 素材库转换为 Pixcall 素材库（自动识别来源格式）
+debris convert -t pixcall -i ./lib.billfish -o ./pixcall-lib
 
+# 使用硬链接将 Eagle 转换为 Pixcall，并输出 NDJSON 日志
+debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink --json
+
+# 将 Pixcall 素材库转换为 Eagle 素材库
+debris convert -t eagle -i ./pixcall-lib -o ./lib.library
 ```
-debris --from billfish --to eagle --input ./Billfish --output ./Eagle
+
+> **提示：** 为保持向后兼容，也支持直接在根命令传递参数（`debris --from ... --to ... --input ... --output ...`）。
+
+#### 常用 `convert` 参数
+
+* `--from`, `-f`：来源格式（`billfish`、`eagle`、`pixcall`），省略时自动探测。
+* `--to`, `-t`：目标格式（`eagle`、`pixcall`）。
+* `--input`, `-i`：输入素材库目录路径。
+* `--output`, `-o`：输出素材库目录路径。
+* `--copy-mode`：素材传输模式：`auto`（默认）、`copy` 或 `hardlink`。
+* `--dry-run`：仅校验并生成计划，不写入目标文件。
+* `--overwrite`：允许覆盖已存在的目标目录内容。
+* `--include-deleted`：包含已删除 / 回收站中的项目。
+* `--include-hidden`：包含隐藏项目。
+* `--name`：自定义目标素材库名称。
+* `--json`：以 NDJSON 格式输出进度事件与最终结果。
+
+### 检查素材库
+
+```sh
+debris inspect --path ./lib.library
+debris inspect -p ./pixcall-lib --json
 ```
 
-基本命令结构为：
-```
-debris --from <输入格式> --to <输出格式> --input <输入路径> --output <输出路径>
+### 预览转换计划
+
+```sh
+debris plan --to pixcall --input ./lib.library --output ./pixcall-lib
 ```
 
-* `--from billfish` 或 `-f billfish`：指定输入库格式为 Billfish。
-* `--to eagle` 或 `-t eagle`：指定所需的输出库格式为 Eagle。
-* `--input ./Billfish` 或 `-i ./Billfish`：指示输入 Billfish 库文件或目录的路径。目前，它期望一个 Billfish 库文件夹。
-* `--output ./Eagle` 或 `-o ./Eagle`：指定保存转换后的 Eagle 库的输出目录。
+### 启动 JSON-RPC 2.0 协议服务
+
+```sh
+debris protocol
+```

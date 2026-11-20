@@ -2,42 +2,76 @@
 
 **Bridge the Gap Between Design Library Formats.**
 
-[简体中文](docs/README/README_zh-Hans.md) [繁體中文](docs/README/README_zh-Hant.md)
+[简体中文](docs/README/README_zh-Hans.md) | [繁體中文](docs/README/README_zh-Hant.md)
 
-Debris is a cross-platform command-line tool designed to simplify your design workflow by enabling **bi-directional conversion of design libraries** between different design library management applications.  Stop struggling with incompatible library formats and seamlessly move your valuable design assets across platforms.
+Debris is a cross-platform command-line tool (and JSON-RPC 2.0 stdio server) for inspecting, planning, and converting design asset libraries across formats. It translates libraries directly through a unified domain model—preserving folders, tags, tag groups, colors, ratings, annotations, origin URLs, and asset files without needing an intermediate format.
 
-Currently, Debris focuses on converting between **Billfish and Pixcall** libraries, leveraging Eagle format as an intermediary.  Future development will expand support to more EDA formats and direct conversion methods.
+## Supported Formats
 
-> **🚧  Work in Progress - Early Stage Development 🚧**
->
-> Please note that Debris is currently under active development and is **not yet production-ready.**  While conversion between Billfish and Pixcall libraries (via Eagle as an intermediate format) is functional, expect potential issues and limitations. We appreciate your early interest and encourage you to contribute to its development!
+| Format | Read (Import) | Write (Export) | Notes |
+| :--- | :---: | :---: | :--- |
+| **Eagle** (`.library`, 4.x) | ✅ | ✅ | Tested & verified (including Hive compatibility) |
+| **Pixcall** (`.pixcall`, v22) | ✅ | ✅ | Tested & verified (see [Pixcall compatibility notes](docs/pixcall-compatibility.md)) |
+| **Billfish** (`.bf`) | ✅ | ⚠️ Unmaintained | Supported for migrating *out* of Billfish. Billfish is discontinued, so exporting *to* Billfish is not actively maintained. |
 
 ## Features
 
-**Currently Supported:**
-
-* **Billfish ↔ Pixcall Conversion (via Eagle):** Convert Billfish libraries to Pixcall and vice-versa, using Eagle format as a stepping stone. This allows you to utilize libraries across these two popular EDA tools.
-* **Command-Line Interface (CLI):**  Simple and intuitive command-line interface for easy integration into your scripts and workflows.
-* **Cross-Platform Compatibility:** Thanks to the multi-platform compatibility of the Go programming language, debris can be run on major operating systems (macOS, Linux, Windows).
+* **Direct Cross-Format Conversion:** Convert directly between supported formats (e.g., `billfish` → `eagle`, `billfish` → `pixcall`, `eagle` ↔ `pixcall`).
+* **Format Auto-Detection:** Omit `--from` / `--format` and Debris will automatically probe the input library format.
+* **Inspection & Pre-Flight Planning:** Use `inspect` to summarize a library and `plan` to preview asset counts, warnings, and potential compatibility losses before converting.
+* **Flexible Asset Transfer:** Supports `copy`, `hardlink`, and `auto` (`--copy-mode`), along with `--dry-run`, `--overwrite`, `--include-deleted`, `--include-hidden`, and `--name`.
+* **Machine-Readable Output & RPC:** Emit NDJSON progress/result streams with `--json`, or run `debris protocol` for a stateless JSON-RPC 2.0 stdio server.
+* **Cross-Platform:** Written in Go (`1.23+`) for macOS, Linux, and Windows.
 
 ## Usage
 
-Debris is used via the command line.
+### Convert a Library
 
-You need to specify the input and output formats, as well as the input and output paths.
+```sh
+# Convert Billfish to Eagle
+debris convert --from billfish --to eagle --input ./lib.billfish --output ./lib.library
 
-Example: Converting a Billfish library to a Eagle library
+# Convert Billfish to Pixcall (source format auto-detected)
+debris convert -t pixcall -i ./lib.billfish -o ./pixcall-lib
 
+# Convert Eagle to Pixcall using hardlinks and NDJSON output
+debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink --json
+
+# Convert Pixcall to Eagle
+debris convert -t eagle -i ./pixcall-lib -o ./lib.library
 ```
-debris --from billfish --to eagle --input ./Billfish --output ./Eagle
+
+> **Note:** Root-level flags (`debris --from ... --to ... --input ... --output ...`) are also supported for backward compatibility.
+
+#### Common `convert` Flags
+
+* `--from`, `-f`: Source format (`billfish`, `eagle`, `pixcall`). Auto-detected if omitted.
+* `--to`, `-t`: Destination format (`eagle`, `pixcall`).
+* `--input`, `-i`: Input library directory path.
+* `--output`, `-o`: Output library directory path.
+* `--copy-mode`: Asset transfer mode: `auto` (default), `copy`, or `hardlink`.
+* `--dry-run`: Validate and plan without writing target files.
+* `--overwrite`: Overwrite existing target directory contents.
+* `--include-deleted`: Include deleted/trashed items.
+* `--include-hidden`: Include hidden items.
+* `--name`: Override the target library name.
+* `--json`: Emit NDJSON progress events and the final result.
+
+### Inspect a Library
+
+```sh
+debris inspect --path ./lib.library
+debris inspect -p ./pixcall-lib --json
 ```
 
-The basic command structure is:
-```
-debris --from <input_format> --to <output_format> --input <input_path> --output <output_path>
+### Preview a Conversion Plan
+
+```sh
+debris plan --to pixcall --input ./lib.library --output ./pixcall-lib
 ```
 
-- `--from billfish` or `-f billfish`: Specifies the input library format as Billfish.
-- `--to eagle` or `-t eagle`: Specifies the desired output library format as Pixcall.
-- `--input ./Billfish` or `-i ./Billfish`: Indicates the path to the input Billfish library file or directory. Currently, it expects a Billfish library folder.
-- `--output ./newFolder` or `-o ./newFolder`: Specifies the output directory where the converted library will be saved.
+### Run JSON-RPC 2.0 Protocol Server
+
+```sh
+debris protocol
+```
