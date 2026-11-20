@@ -1,5 +1,6 @@
 test-lib
 **/.DS_Store
+**/Icon?
 dist
 build
 .env
