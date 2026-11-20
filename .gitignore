@@ -1,6 +1,7 @@
 test-lib
 **/.DS_Store
 dist
+build
 .env
 node_modules
 .mygo

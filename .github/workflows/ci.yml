@@ -28,3 +28,32 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+  gui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build web
+        run: bun run build:web
+
+      - name: Build desktop (smoke)
+        run: bunx mygo build -platform linux/amd64 -skip-build-command

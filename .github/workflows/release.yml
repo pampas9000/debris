@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,3 +31,92 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/universal
+            artifact: desktop-macos
+          - os: windows-latest
+            platform: windows/amd64,windows/arm64
+            artifact: desktop-windows
+          - os: ubuntu-latest
+            platform: linux/amd64,linux/arm64
+            artifact: desktop-linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: gui
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=0.1.0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build desktop (${{ matrix.platform }})
+        env:
+          DEBRIS_VERSION: ${{ steps.version.outputs.value }}
+        run: bunx mygo build -platform "${{ matrix.platform }}"
+
+      - name: Collect desktop artifacts
+        run: |
+          mkdir -p artifacts
+          find build -maxdepth 2 -type f \( \
+            -name "*.dmg" -o \
+            -name "*-setup-*.exe" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.tar.gz" \
+          \) -exec cp {} artifacts/ \;
+          ls -lh artifacts
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: gui/artifacts/*
+          if-no-files-found: error
+
+  publish-desktop:
+    needs: [release, desktop]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: desktop-artifacts
+          merge-multiple: true
+
+      - name: Upload desktop assets to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -lh desktop-artifacts
+          gh release upload "${GITHUB_REF_NAME}" desktop-artifacts/* --clobber
