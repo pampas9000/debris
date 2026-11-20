@@ -29,7 +29,7 @@ builds:
 
 archives:
   - ids: [debris]
-    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     formats: ["zip"]
     files:
       - README.md

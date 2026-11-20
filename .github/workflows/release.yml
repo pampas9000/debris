@@ -84,15 +84,39 @@ jobs:
         run: bunx mygo build -platform "${{ matrix.platform }}"
 
       - name: Collect desktop artifacts
+        env:
+          DEBRIS_VERSION: ${{ steps.version.outputs.value }}
         run: |
           mkdir -p artifacts
-          find build -maxdepth 2 -type f \( \
+          while IFS= read -r -d '' file; do
+            base="$(basename "$file")"
+            case "$base" in
+              *.dmg)
+                dest="debris-app-${DEBRIS_VERSION}-darwin-universal.dmg"
+                ;;
+              *-setup-*.exe)
+                arch="${base#*-setup-${DEBRIS_VERSION}-}"
+                arch="${arch%.exe}"
+                dest="debris-app-${DEBRIS_VERSION}-windows-${arch}-setup.exe"
+                ;;
+              debris_*)
+                dest="debris-app_${base#debris_}"
+                ;;
+              debris-*)
+                dest="debris-app-${base#debris-}"
+                ;;
+              *)
+                dest="$base"
+                ;;
+            esac
+            cp "$file" "artifacts/${dest}"
+          done < <(find build -maxdepth 2 -type f \( \
             -name "*.dmg" -o \
             -name "*-setup-*.exe" -o \
             -name "*.deb" -o \
             -name "*.rpm" -o \
             -name "*.tar.gz" \
-          \) -exec cp {} artifacts/ \;
+          \) -print0)
           ls -lh artifacts
 
       - name: Upload workflow artifacts
