@@ -111,7 +111,7 @@ func (e *Engine) Plan(ctx context.Context, req PlanRequest) (PlanResponse, error
 	return e.runner.Plan(ctx, req)
 }
 
-// Convert runs (or dry-runs) a library conversion and streams Events to emit.
+// Convert runs a library conversion and streams Events to emit.
 func (e *Engine) Convert(ctx context.Context, req ConvertRequest, emit EventCallback) (ConvertResponse, error) {
 	if err := checkContext(ctx); err != nil {
 		return ConvertResponse{}, err

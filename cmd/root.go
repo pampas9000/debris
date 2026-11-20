@@ -48,8 +48,6 @@ func NewRootCmd(eng *debris.Engine) *cobra.Command {
 		eng = defaultEngine()
 	}
 
-	var rootConvertOpts transferOptions
-
 	rootCmd := &cobra.Command{
 		Use:     "debris",
 		Short:   "Convert and inspect design asset libraries across formats",
@@ -58,29 +56,13 @@ func NewRootCmd(eng *debris.Engine) *cobra.Command {
 		Example: `  debris convert ./lib.billfish ./lib.library -t eagle
   debris convert ./lib.billfish -t pixcall --json
   debris inspect ./lib.library --json
-  debris plan ./lib.billfish -t eagle
-  debris protocol`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if !hasAnyConvertFlagChanged(cmd) {
-				return cmd.Help()
-			}
-			cmd.SilenceUsage = true
-			applyPositionalInputOutput(&rootConvertOpts, nil)
-			return executeConvert(cmd, eng, rootConvertOpts)
-		},
-	}
-
-	bindTransferFlags(rootCmd, &rootConvertOpts, eng, true)
-	for _, name := range convertFlagNames {
-		_ = rootCmd.Flags().MarkHidden(name)
+  debris plan ./lib.billfish -t eagle`,
 	}
 
 	rootCmd.AddCommand(
 		newConvertCmd(eng),
 		newInspectCmd(eng),
 		newPlanCmd(eng),
-		newProtocolCmd(eng),
 	)
 
 	return rootCmd

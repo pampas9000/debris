@@ -222,38 +222,8 @@ func TestWriteAndReadRoundTripSynthetic(t *testing.T) {
 		},
 	}
 
-	// DryRun must not create target DB or files, and should report skip + missing warning.
-	dryDir := t.TempDir()
-	adapter := New()
-	dryWriter, err := adapter.OpenWriter(ctx, dryDir, format.WriteOptions{DryRun: true, IncludeDeleted: true, IncludeHidden: true})
-	if err != nil {
-		t.Fatalf("OpenWriter dryrun: %v", err)
-	}
-	var dryEvents []format.ProgressEvent
-	if err := dryWriter.Write(ctx, lib, func(ev format.ProgressEvent) {
-		dryEvents = append(dryEvents, ev)
-	}); err != nil {
-		t.Fatalf("dryrun Write: %v", err)
-	}
-	_ = dryWriter.Close()
-
-	if _, err := os.Stat(filepath.Join(dryDir, ".bf", "billfish.db")); !os.IsNotExist(err) {
-		t.Fatalf("dryrun unexpectedly created billfish.db")
-	}
-	var dryWarnings, drySkips int
-	for _, ev := range dryEvents {
-		if ev.Kind == "warning" {
-			dryWarnings++
-		}
-		if ev.Kind == "progress" && ev.CopyMode == "skip" {
-			drySkips++
-		}
-	}
-	if dryWarnings != 1 || drySkips != len(lib.Assets) {
-		t.Fatalf("dryrun events mismatch: warnings=%d skips=%d", dryWarnings, drySkips)
-	}
-
 	// Real write with hardlink mode (and Overwrite check).
+	adapter := New()
 	outDir := t.TempDir()
 	writer, err := adapter.OpenWriter(ctx, outDir, format.WriteOptions{
 		CopyMode:       format.CopyModeHardlink,

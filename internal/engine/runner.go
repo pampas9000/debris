@@ -185,8 +185,8 @@ func (r *Runner) Plan(ctx context.Context, req debris.PlanRequest) (resp debris.
 	return BuildPlan(ctx, srcAdapter, dstAdapter, inspectRes, req)
 }
 
-// Convert reads the source library, filters items according to req, and unless
-// req.DryRun is set, writes the target library while streaming progress events.
+// Convert reads the source library, filters items according to req, and
+// writes the target library while streaming progress events.
 func (r *Runner) Convert(ctx context.Context, req debris.ConvertRequest, emit debris.EventCallback) (resp debris.ConvertResponse, retErr error) {
 	start := time.Now()
 
@@ -221,10 +221,8 @@ func (r *Runner) Convert(ctx context.Context, req debris.ConvertRequest, emit de
 		return debris.ConvertResponse{}, debris.NewError(debris.CodeUnsupportedFormat, "unsupported target format", req.To)
 	}
 
-	if !req.DryRun {
-		if err := validateTargetPath(req.OutputPath, req.Overwrite); err != nil {
-			return debris.ConvertResponse{}, err
-		}
+	if err := validateTargetPath(req.OutputPath, req.Overwrite); err != nil {
+		return debris.ConvertResponse{}, err
 	}
 
 	if emit != nil {
@@ -253,26 +251,11 @@ func (r *Runner) Convert(ctx context.Context, req debris.ConvertRequest, emit de
 		InputPath:     req.InputPath,
 		OutputPath:    req.OutputPath,
 		CopyMode:      copyMode,
-		DryRun:        req.DryRun,
 		FolderCount:   folderCount,
 		TagGroupCount: tagGroupCount,
 		TagCount:      tagCount,
 		AssetCount:    assetCount,
 		TotalBytes:    totalBytes,
-	}
-
-	if req.DryRun {
-		if emit != nil {
-			emit(debris.Event{
-				Kind:    "stage",
-				Stage:   "dry-run",
-				Total:   int64(assetCount),
-				Bytes:   totalBytes,
-				Message: "dry-run completed without writing target library",
-			})
-		}
-		resp.DurationMs = time.Since(start).Milliseconds()
-		return resp, nil
 	}
 
 	if err := os.MkdirAll(req.OutputPath, 0o755); err != nil {
@@ -291,7 +274,6 @@ func (r *Runner) Convert(ctx context.Context, req debris.ConvertRequest, emit de
 
 	writeOpts := format.WriteOptions{
 		CopyMode:       parsedMode,
-		DryRun:         false,
 		Overwrite:      req.Overwrite,
 		IncludeDeleted: req.IncludeDeleted,
 		IncludeHidden:  req.IncludeHidden,

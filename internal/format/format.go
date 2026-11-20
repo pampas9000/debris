@@ -94,7 +94,6 @@ type ReadOptions struct {
 // WriteOptions configures how a Writer materializes a library on disk.
 type WriteOptions struct {
 	CopyMode       CopyMode `json:"copyMode,omitempty"`
-	DryRun         bool     `json:"dryRun,omitempty"`
 	Overwrite      bool     `json:"overwrite,omitempty"`
 	IncludeDeleted bool     `json:"includeDeleted,omitempty"`
 	IncludeHidden  bool     `json:"includeHidden,omitempty"`

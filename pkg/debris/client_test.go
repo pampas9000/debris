@@ -41,7 +41,6 @@ func (s *stubRunner) Convert(_ context.Context, req ConvertRequest, emit EventCa
 		InputPath:    req.InputPath,
 		OutputPath:   req.OutputPath,
 		CopyMode:     req.CopyMode,
-		DryRun:       req.DryRun,
 	}, nil
 }
 
@@ -82,14 +81,13 @@ func TestEngine_ValidationAndDelegation(t *testing.T) {
 		To:         "eagle",
 		InputPath:  "/in",
 		OutputPath: "/out",
-		DryRun:     true,
 	}, func(ev Event) {
 		seenEvents++
 	})
 	if err != nil {
 		t.Fatalf("Convert failed: %v", err)
 	}
-	if resp.CopyMode != CopyModeAuto || !resp.DryRun || seenEvents != 1 {
+	if resp.CopyMode != CopyModeAuto || seenEvents != 1 {
 		t.Fatalf("unexpected Convert response=%#v seenEvents=%d", resp, seenEvents)
 	}
 

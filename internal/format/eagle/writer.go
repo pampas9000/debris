@@ -66,10 +66,8 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	}
 	addFolderTags(eagleFolders)
 
-	if !w.opts.DryRun {
-		if err := os.MkdirAll(filepath.Join(w.rootPath, "images"), 0o755); err != nil {
-			return fmt.Errorf("eagle: create images directory: %w", err)
-		}
+	if err := os.MkdirAll(filepath.Join(w.rootPath, "images"), 0o755); err != nil {
+		return fmt.Errorf("eagle: create images directory: %w", err)
 	}
 
 	totalAssets := int64(len(lib.Assets))
@@ -174,19 +172,6 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			}
 		}
 
-		if w.opts.DryRun {
-			emitEvent(emit, format.ProgressEvent{
-				Kind:     "progress",
-				Stage:    "assets",
-				Current:  int64(i + 1),
-				Total:    totalAssets,
-				Bytes:    fileSize,
-				AssetID:  asset.ID,
-				CopyMode: "skip",
-			})
-			continue
-		}
-
 		infoDir := filepath.Join(w.rootPath, "images", eagleID+".info")
 		if err := os.MkdirAll(infoDir, 0o755); err != nil {
 			return fmt.Errorf("eagle: create item dir %q: %w", infoDir, err)
@@ -286,10 +271,6 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			AssetID:  asset.ID,
 			CopyMode: usedMode,
 		})
-	}
-
-	if w.opts.DryRun {
-		return nil
 	}
 
 	emitEvent(emit, format.ProgressEvent{

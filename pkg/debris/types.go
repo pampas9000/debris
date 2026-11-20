@@ -103,14 +103,13 @@ type PlanResponse struct {
 	Losses        []string `json:"losses,omitempty"`
 }
 
-// ConvertRequest executes (or dry-runs) a conversion between two formats.
+// ConvertRequest executes a conversion between two formats.
 type ConvertRequest struct {
 	From           string   `json:"from,omitempty"`
 	To             string   `json:"to"`
 	InputPath      string   `json:"inputPath"`
 	OutputPath     string   `json:"outputPath"`
 	CopyMode       CopyMode `json:"copyMode,omitempty"`
-	DryRun         bool     `json:"dryRun,omitempty"`
 	IncludeDeleted bool     `json:"includeDeleted,omitempty"`
 	IncludeHidden  bool     `json:"includeHidden,omitempty"`
 	Overwrite      bool     `json:"overwrite,omitempty"`
@@ -124,7 +123,6 @@ type ConvertResponse struct {
 	InputPath        string   `json:"inputPath"`
 	OutputPath       string   `json:"outputPath"`
 	CopyMode         CopyMode `json:"copyMode"`
-	DryRun           bool     `json:"dryRun"`
 	FolderCount      int      `json:"folderCount"`
 	TagGroupCount    int      `json:"tagGroupCount"`
 	TagCount         int      `json:"tagCount"`

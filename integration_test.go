@@ -1,7 +1,6 @@
 package main_test
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -19,7 +18,6 @@ import (
 	"debris/internal/format/billfish"
 	"debris/internal/format/eagle"
 	"debris/internal/format/pixcall"
-	"debris/internal/protocol"
 	"debris/pkg/debris"
 )
 
@@ -350,33 +348,7 @@ func TestIntegration_AllSixConversions(t *testing.T) {
 		t.Run(tc.from+"->"+tc.to, func(t *testing.T) {
 			srcCopy := copySampleLibrary(t, tc.fromDir)
 
-			// 1. Dry-Run conversion writes nothing to disk
-			dryOut := filepath.Join(t.TempDir(), "dry_"+tc.to)
-			var dryEvents []debris.Event
-			dryResp, err := eng.Convert(ctx, debris.ConvertRequest{
-				To:         tc.to,
-				InputPath:  srcCopy,
-				OutputPath: dryOut,
-				CopyMode:   debris.CopyModeCopy,
-				DryRun:     true,
-			}, func(ev debris.Event) {
-				dryEvents = append(dryEvents, ev)
-			})
-			if err != nil {
-				t.Fatalf("dry-run Convert(%s -> %s) failed: %v", tc.from, tc.to, err)
-			}
-			if !dryResp.DryRun || dryResp.SourceFormat != tc.from || dryResp.TargetFormat != tc.to ||
-				dryResp.AssetCount != tc.wantAssets || dryResp.CopiedAssets != 0 || dryResp.HardlinkedAssets != 0 {
-				t.Fatalf("unexpected dry-run response: %+v", dryResp)
-			}
-			if len(dryEvents) == 0 {
-				t.Fatal("expected dry-run stage events")
-			}
-			if _, err := os.Stat(dryOut); !os.IsNotExist(err) {
-				t.Fatalf("dry-run created output directory %q", dryOut)
-			}
-
-			// 2. Copy and Hardlink real conversions
+			// Copy and Hardlink real conversions
 			modes := []debris.CopyMode{debris.CopyModeCopy, debris.CopyModeHardlink}
 			for _, mode := range modes {
 				t.Run(string(mode), func(t *testing.T) {
@@ -550,175 +522,6 @@ func TestIntegration_AllSixConversions(t *testing.T) {
 				})
 			}
 		})
-	}
-}
-
-func TestIntegration_ProtocolEndToEnd(t *testing.T) {
-	eng, _ := newIntegrationEngine()
-	srcCopy := copySampleLibrary(t, "billfish.library")
-	outDir := filepath.Join(t.TempDir(), "rpc_eagle.library")
-
-	inR, inW := io.Pipe()
-	outR, outW := io.Pipe()
-
-	serveDone := make(chan error, 1)
-	go func() {
-		err := protocol.NewServer(eng).Serve(context.Background(), inR, outW)
-		_ = outW.Close()
-		serveDone <- err
-	}()
-
-	type rpcMsg struct {
-		JSONRPC string          `json:"jsonrpc"`
-		ID      *int            `json:"id,omitempty"`
-		Method  string          `json:"method,omitempty"`
-		Params  json.RawMessage `json:"params,omitempty"`
-		Result  json.RawMessage `json:"result,omitempty"`
-		Error   *protocol.RPCError `json:"error,omitempty"`
-	}
-
-	msgCh := make(chan rpcMsg, 32)
-	scanErrCh := make(chan error, 1)
-	go func() {
-		scanner := bufio.NewScanner(outR)
-		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-		for scanner.Scan() {
-			var m rpcMsg
-			if err := json.Unmarshal(scanner.Bytes(), &m); err != nil {
-				scanErrCh <- err
-				return
-			}
-			msgCh <- m
-		}
-		scanErrCh <- scanner.Err()
-	}()
-
-	send := func(id int, method string, params any) rpcMsg {
-		t.Helper()
-		payload := map[string]any{
-			"jsonrpc": "2.0",
-			"id":      id,
-			"method":  method,
-		}
-		if params != nil {
-			payload["params"] = params
-		}
-		b, err := json.Marshal(payload)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := inW.Write(append(b, '\n')); err != nil {
-			t.Fatal(err)
-		}
-		for {
-			select {
-			case err := <-scanErrCh:
-				t.Fatalf("stdout scanner ended early: %v", err)
-			case m := <-msgCh:
-				if m.ID == nil {
-					// progress notification
-					continue
-				}
-				if *m.ID != id {
-					t.Fatalf("unexpected response ID %d, want %d", *m.ID, id)
-				}
-				if m.Error != nil {
-					t.Fatalf("RPC %s error: %+v", method, m.Error)
-				}
-				return m
-			}
-		}
-	}
-
-	// 1. formats
-	formatsMsg := send(1, "formats", nil)
-	var specs []debris.FormatSpec
-	if err := json.Unmarshal(formatsMsg.Result, &specs); err != nil || len(specs) != 3 {
-		t.Fatalf("unexpected formats result: %s (%v)", formatsMsg.Result, err)
-	}
-
-	// 2. probe
-	probeMsg := send(2, "probe", debris.ProbeRequest{Path: srcCopy})
-	var probeResp debris.ProbeResponse
-	if err := json.Unmarshal(probeMsg.Result, &probeResp); err != nil || !probeResp.Matched || probeResp.Format != "billfish" {
-		t.Fatalf("unexpected probe result: %s (%v)", probeMsg.Result, err)
-	}
-
-	// 3. inspect
-	inspectMsg := send(3, "inspect", debris.InspectRequest{Path: srcCopy})
-	var inspectResp debris.InspectResponse
-	if err := json.Unmarshal(inspectMsg.Result, &inspectResp); err != nil || inspectResp.AssetCount != 4 || inspectResp.FolderCount != 2 {
-		t.Fatalf("unexpected inspect result: %s (%v)", inspectMsg.Result, err)
-	}
-
-	// 4. plan
-	planMsg := send(4, "plan", debris.PlanRequest{
-		To:         "eagle",
-		InputPath:  srcCopy,
-		OutputPath: outDir,
-		CopyMode:   debris.CopyModeCopy,
-	})
-	var planResp debris.PlanResponse
-	if err := json.Unmarshal(planMsg.Result, &planResp); err != nil || planResp.TargetFormat != "eagle" || planResp.AssetCount != 4 {
-		t.Fatalf("unexpected plan result: %s (%v)", planMsg.Result, err)
-	}
-
-	// 5. convert (collect progress notifications + final result)
-	convPayload, _ := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      5,
-		"method":  "convert",
-		"params": debris.ConvertRequest{
-			To:         "eagle",
-			InputPath:  srcCopy,
-			OutputPath: outDir,
-			CopyMode:   debris.CopyModeCopy,
-		},
-	})
-	if _, err := inW.Write(append(convPayload, '\n')); err != nil {
-		t.Fatal(err)
-	}
-	var progressCount int
-	var convertResp debris.ConvertResponse
-	for {
-		m := <-msgCh
-		if m.ID == nil && m.Method == "progress" {
-			progressCount++
-			continue
-		}
-		if m.ID != nil && *m.ID == 5 {
-			if m.Error != nil {
-				t.Fatalf("RPC convert error: %+v", m.Error)
-			}
-			if err := json.Unmarshal(m.Result, &convertResp); err != nil {
-				t.Fatalf("unmarshal convert result: %v", err)
-			}
-			break
-		}
-	}
-	if progressCount == 0 {
-		t.Fatal("expected at least 1 progress notification during RPC convert")
-	}
-	if convertResp.TargetFormat != "eagle" || convertResp.CopiedAssets != 4 || convertResp.AssetCount != 4 {
-		t.Fatalf("unexpected RPC convert response: %+v", convertResp)
-	}
-
-	// Verify converted output via probe + inspect over RPC
-	outProbeMsg := send(6, "probe", debris.ProbeRequest{Path: outDir})
-	var outProbe debris.ProbeResponse
-	if err := json.Unmarshal(outProbeMsg.Result, &outProbe); err != nil || !outProbe.Matched || outProbe.Format != "eagle" {
-		t.Fatalf("unexpected output probe: %s (%v)", outProbeMsg.Result, err)
-	}
-
-	outInspectMsg := send(7, "inspect", debris.InspectRequest{Path: outDir})
-	var outInspect debris.InspectResponse
-	if err := json.Unmarshal(outInspectMsg.Result, &outInspect); err != nil || outInspect.AssetCount != 4 || outInspect.FolderCount != 2 {
-		t.Fatalf("unexpected output inspect: %s (%v)", outInspectMsg.Result, err)
-	}
-
-	_ = inW.Close()
-	if err := <-serveDone; err != nil {
-		t.Fatalf("protocol.Serve error: %v", err)
 	}
 }
 

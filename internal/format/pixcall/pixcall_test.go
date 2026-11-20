@@ -368,35 +368,7 @@ func TestWriterEdgeCasesAndRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	adapter := pixcall.New()
 
-	// 1. DryRun writes nothing to disk
-	dryOut := filepath.Join(tmpDir, "dry_out")
-	dryWriter, err := adapter.OpenWriter(ctx, dryOut, format.WriteOptions{
-		DryRun:   true,
-		CopyMode: format.CopyModeAuto,
-	})
-	if err != nil {
-		t.Fatalf("OpenWriter dryrun error: %v", err)
-	}
-	var dryWarnings, drySkips int
-	if err := dryWriter.Write(ctx, lib, func(ev format.ProgressEvent) {
-		if ev.Kind == "warning" {
-			dryWarnings++
-		}
-		if ev.Kind == "progress" && ev.CopyMode == "skip" {
-			drySkips++
-		}
-	}); err != nil {
-		t.Fatalf("dryrun Write error: %v", err)
-	}
-	_ = dryWriter.Close()
-	if _, err := os.Stat(dryOut); !os.IsNotExist(err) {
-		t.Fatalf("DryRun created target directory %q", dryOut)
-	}
-	if dryWarnings != 1 || drySkips != 5 {
-		t.Fatalf("unexpected dryrun events: warnings=%d skips=%d", dryWarnings, drySkips)
-	}
-
-	// 2. Real write with Hardlink mode
+	// Real write with Hardlink mode
 	outDir := filepath.Join(tmpDir, "real_out")
 	writer, err := adapter.OpenWriter(ctx, outDir, format.WriteOptions{
 		CopyMode: format.CopyModeHardlink,

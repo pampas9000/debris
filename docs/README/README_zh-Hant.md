@@ -19,8 +19,8 @@ Debris 是一款跨平台命令列工具（同時提供 JSON-RPC 2.0 stdio 服�
 * **跨格式直接轉換：** 在支援的格式之間直接轉換（例如 `billfish` → `eagle`、`billfish` → `pixcall`、`eagle` ↔ `pixcall`）。
 * **來源格式自動識別：** 省略 `--from` / `--format` 時，Debris 會自動探測輸入素材庫的格式。
 * **檢查與轉換規劃：** 使用 `inspect` 查看素材庫摘要；使用 `plan` 在實際轉換前預覽資產數量、警告訊息以及潛在的相容性損失。
-* **靈活的素材傳輸模式：** 支援 `copy`、`hardlink` 與 `auto`（`--copy-mode`），並提供 `--dry-run`、`--overwrite`、`--include-deleted`、`--include-hidden` 和 `--name` 等選項。
-* **自動化與協定整合：** 透過 `--json` 輸出 NDJSON 進度事件與最終結果，或透過 `debris protocol` 啟動無狀態的 JSON-RPC 2.0 stdio 服務。
+* **靈活的素材傳輸模式：** 支援 `copy`、`hardlink` 與 `auto`（`--copy-mode`），並提供 `--overwrite`、`--include-deleted`、`--include-hidden` 和 `--name` 等選項。
+* **機器可讀輸出：** 透過 `--json` 輸出 NDJSON 進度事件與最終結果。
 * **跨平台相容：** 基於 Go（`1.23+`）建構，支援 macOS、Linux 與 Windows。
 
 ## 用法
@@ -41,8 +41,6 @@ debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink
 debris convert -t eagle -i ./pixcall-lib -o ./lib.library
 ```
 
-> **提示：** 為保持向後相容，也支援直接在根命令傳遞參數（`debris --from ... --to ... --input ... --output ...`）。
-
 #### 常用 `convert` 參數
 
 * `--from`, `-f`：來源格式（`billfish`、`eagle`、`pixcall`），省略時自動探測。
@@ -50,7 +48,6 @@ debris convert -t eagle -i ./pixcall-lib -o ./lib.library
 * `--input`, `-i`：輸入素材庫目錄路徑。
 * `--output`, `-o`：輸出素材庫目錄路徑。
 * `--copy-mode`：素材傳輸模式：`auto`（預設）、`copy` 或 `hardlink`。
-* `--dry-run`：僅校驗並產生計畫，不寫入目標檔案。
 * `--overwrite`：允許覆寫已存在的目標目錄內容。
 * `--include-deleted`：包含已刪除 / 垃圾桶中的項目。
 * `--include-hidden`：包含隱藏項目。
@@ -68,10 +65,4 @@ debris inspect -p ./pixcall-lib --json
 
 ```sh
 debris plan --to pixcall --input ./lib.library --output ./pixcall-lib
-```
-
-### 啟動 JSON-RPC 2.0 協定服務
-
-```sh
-debris protocol
 ```

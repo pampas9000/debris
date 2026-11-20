@@ -95,7 +95,6 @@ func (m *mockRunner) Convert(_ context.Context, req debris.ConvertRequest, emit 
 		InputPath:        req.InputPath,
 		OutputPath:       req.OutputPath,
 		CopyMode:         req.CopyMode,
-		DryRun:           req.DryRun,
 		FolderCount:      3,
 		TagCount:         8,
 		AssetCount:       25,
@@ -207,7 +206,6 @@ func TestConvertJSONCmd(t *testing.T) {
 		"--input", "/in/bf",
 		"--output", "/out/pix",
 		"--copy-mode", "copy",
-		"--dry-run",
 		"--overwrite",
 		"--include-deleted",
 		"--include-hidden",
@@ -218,7 +216,6 @@ func TestConvertJSONCmd(t *testing.T) {
 		t.Fatalf("convert --json failed: %v", err)
 	}
 	if runner.lastConvert.CopyMode != debris.CopyModeCopy ||
-		!runner.lastConvert.DryRun ||
 		!runner.lastConvert.Overwrite ||
 		!runner.lastConvert.IncludeDeleted ||
 		!runner.lastConvert.IncludeHidden ||
@@ -247,7 +244,7 @@ func TestConvertJSONCmd(t *testing.T) {
 	if lines[1].Type != "event" || lines[1].Event == nil || lines[1].Event.AssetID != "asset-1" {
 		t.Fatalf("unexpected line 1: %+v", lines[1])
 	}
-	if lines[3].Type != "result" || lines[3].Result == nil || !lines[3].Result.DryRun || lines[3].Result.TargetFormat != "pixcall" {
+	if lines[3].Type != "result" || lines[3].Result == nil || lines[3].Result.TargetFormat != "pixcall" {
 		t.Fatalf("unexpected result line: %+v", lines[3])
 	}
 }
@@ -276,28 +273,8 @@ func TestConvertJSONError(t *testing.T) {
 	}
 }
 
-func TestBackwardCompatRootFlags(t *testing.T) {
+func TestRootHelp(t *testing.T) {
 	runner := &mockRunner{}
-	stdout, _, err := runCLI(
-		runner,
-		"-f", "billfish",
-		"-t", "eagle",
-		"-i", "./old.billfish",
-		"-o", "./new.library",
-	)
-	if err != nil {
-		t.Fatalf("root compat convert failed: %v", err)
-	}
-	if runner.lastConvert.From != "billfish" ||
-		runner.lastConvert.To != "eagle" ||
-		runner.lastConvert.InputPath != "./old.billfish" ||
-		runner.lastConvert.OutputPath != "./new.library" ||
-		runner.lastConvert.CopyMode != debris.CopyModeAuto {
-		t.Fatalf("unexpected root convert request: %+v", runner.lastConvert)
-	}
-	if !strings.Contains(stdout, "Converted billfish -> eagle") {
-		t.Fatalf("unexpected root convert output:\n%s", stdout)
-	}
 
 	// No args/flags prints help without error and does not emit legacy banner.
 	helpOut, _, err := runCLI(runner)
@@ -309,28 +286,6 @@ func TestBackwardCompatRootFlags(t *testing.T) {
 	}
 	if !strings.Contains(helpOut, "Usage:") {
 		t.Fatalf("expected usage help output, got:\n%s", helpOut)
-	}
-}
-
-func TestProtocolCmd(t *testing.T) {
-	runner := &mockRunner{
-		formats: []debris.FormatSpec{{ID: "eagle", DisplayName: "Eagle"}},
-	}
-	eng := debris.NewEngine(debris.WithRunner(runner))
-	root := NewRootCmd(eng)
-
-	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"formats"}` + "\n")
-	var outBuf, errBuf bytes.Buffer
-	root.SetIn(in)
-	root.SetOut(&outBuf)
-	root.SetErr(&errBuf)
-	root.SetArgs([]string{"protocol"})
-
-	if err := root.Execute(); err != nil {
-		t.Fatalf("protocol command failed: %v", err)
-	}
-	if !strings.Contains(outBuf.String(), `"eagle"`) {
-		t.Fatalf("expected formats JSON-RPC response, got: %s", outBuf.String())
 	}
 }
 

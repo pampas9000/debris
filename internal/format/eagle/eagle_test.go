@@ -303,7 +303,7 @@ func TestReadSpecialFilenamesDeletedTagsAndFolders(t *testing.T) {
 	}
 }
 
-func TestWriterRoundTripNestedFoldersCopyHardlinkDryRunAndJSONShape(t *testing.T) {
+func TestWriterRoundTripNestedFoldersCopyHardlinkAndJSONShape(t *testing.T) {
 	ctx := context.Background()
 	srcDir := t.TempDir()
 
@@ -398,40 +398,6 @@ func TestWriterRoundTripNestedFoldersCopyHardlinkDryRunAndJSONShape(t *testing.T
 	}
 
 	adapter := eagle.New()
-
-	t.Run("dry run writes nothing", func(t *testing.T) {
-		dryDir := filepath.Join(t.TempDir(), "dry.library")
-		w, err := adapter.OpenWriter(ctx, dryDir, format.WriteOptions{
-			CopyMode: format.CopyModeCopy,
-			DryRun:   true,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer w.Close()
-
-		var events []format.ProgressEvent
-		if err := w.Write(ctx, lib, func(ev format.ProgressEvent) {
-			events = append(events, ev)
-		}); err != nil {
-			t.Fatalf("DryRun Write err: %v", err)
-		}
-		if _, err := os.Stat(dryDir); !os.IsNotExist(err) {
-			t.Fatalf("DryRun should not create %q", dryDir)
-		}
-		var skips, warnings int
-		for _, ev := range events {
-			if ev.Kind == "progress" && ev.CopyMode == "skip" {
-				skips++
-			}
-			if ev.Kind == "warning" {
-				warnings++
-			}
-		}
-		if skips != 3 || warnings != 1 {
-			t.Fatalf("unexpected dry run events: skips=%d warnings=%d events=%+v", skips, warnings, events)
-		}
-	})
 
 	t.Run("canceled context stops write", func(t *testing.T) {
 		outDir := filepath.Join(t.TempDir(), "canceled.library")

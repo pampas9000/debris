@@ -20,28 +20,12 @@ type transferOptions struct {
 	InputPath      string
 	OutputPath     string
 	CopyMode       string
-	DryRun         bool
 	Overwrite      bool
 	IncludeDeleted bool
 	IncludeHidden  bool
 	LibraryName    string
 	Quiet          bool
 	JSON           bool
-}
-
-var convertFlagNames = []string{
-	"from",
-	"to",
-	"input",
-	"output",
-	"copy-mode",
-	"dry-run",
-	"overwrite",
-	"include-deleted",
-	"include-hidden",
-	"name",
-	"quiet",
-	"json",
 }
 
 func bindTransferFlags(cmd *cobra.Command, opts *transferOptions, eng *debris.Engine, includeConvertOnly bool) {
@@ -57,7 +41,6 @@ func bindTransferFlags(cmd *cobra.Command, opts *transferOptions, eng *debris.En
 	flags.StringVar(&opts.LibraryName, "name", "", "Override target library name")
 
 	if includeConvertOnly {
-		flags.BoolVar(&opts.DryRun, "dry-run", false, "Validate and plan without writing target files")
 		flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "Suppress progress output in non-JSON mode")
 		flags.BoolVar(&opts.JSON, "json", false, "Emit NDJSON progress events and final result")
 	} else {

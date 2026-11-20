@@ -39,16 +39,6 @@ func newConvertCmd(eng *debris.Engine) *cobra.Command {
 	return cmd
 }
 
-func hasAnyConvertFlagChanged(cmd *cobra.Command) bool {
-	flags := cmd.Flags()
-	for _, name := range convertFlagNames {
-		if flags.Changed(name) {
-			return true
-		}
-	}
-	return false
-}
-
 func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts transferOptions) error {
 	req := debris.ConvertRequest{
 		From:           opts.From,
@@ -56,7 +46,6 @@ func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts transferOptions
 		InputPath:      opts.InputPath,
 		OutputPath:     opts.OutputPath,
 		CopyMode:       debris.CopyMode(opts.CopyMode),
-		DryRun:         opts.DryRun,
 		IncludeDeleted: opts.IncludeDeleted,
 		IncludeHidden:  opts.IncludeHidden,
 		Overwrite:      opts.Overwrite,
@@ -153,7 +142,7 @@ func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts transferOptions
 	_, _ = fmt.Fprintf(out, "Converted %s -> %s\n", resp.SourceFormat, resp.TargetFormat)
 	_, _ = fmt.Fprintf(out, "Input:      %s\n", resp.InputPath)
 	_, _ = fmt.Fprintf(out, "Output:     %s\n", resp.OutputPath)
-	_, _ = fmt.Fprintf(out, "CopyMode:   %s (dryRun=%t)\n", resp.CopyMode, resp.DryRun)
+	_, _ = fmt.Fprintf(out, "CopyMode:   %s\n", resp.CopyMode)
 	_, _ = fmt.Fprintf(out, "Folders:    %d\n", resp.FolderCount)
 	_, _ = fmt.Fprintf(out, "TagGroups:  %d\n", resp.TagGroupCount)
 	_, _ = fmt.Fprintf(out, "Tags:       %d\n", resp.TagCount)

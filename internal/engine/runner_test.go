@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -377,7 +376,7 @@ func TestPlan_CapabilityLossesAndTargetChecks(t *testing.T) {
 	}
 }
 
-func TestConvert_CopyHardlinkDryRunOverwriteFilterCancelAndEvents(t *testing.T) {
+func TestConvert_CopyHardlinkOverwriteFilterCancelAndEvents(t *testing.T) {
 	inDir := t.TempDir()
 
 	buildLib := func() *domain.Library {
@@ -407,53 +406,6 @@ func TestConvert_CopyHardlinkDryRunOverwriteFilterCancelAndEvents(t *testing.T) 
 			},
 		}
 	}
-
-	t.Run("dryRun skips target creation and writer", func(t *testing.T) {
-		outDir := filepath.Join(t.TempDir(), "dry-out")
-		writerCalled := false
-		src := &mockAdapter{
-			id: "eagle",
-			probeFn: func(ctx context.Context, path string) (format.ProbeResult, error) {
-				return format.ProbeResult{Matched: true, Confidence: 100}, nil
-			},
-			openReaderFn: func(ctx context.Context, path string, opts format.ReadOptions) (format.Reader, error) {
-				return &mockReader{readFn: func(ctx context.Context) (*domain.Library, error) { return buildLib(), nil }}, nil
-			},
-		}
-		dst := &mockAdapter{
-			id: "pixcall",
-			openWriterFn: func(ctx context.Context, path string, opts format.WriteOptions) (format.Writer, error) {
-				writerCalled = true
-				return &mockWriter{}, nil
-			},
-		}
-
-		eng := debris.NewEngine(debris.WithRunner(NewRunner(NewRegistry(src, dst))))
-		var events []debris.Event
-		resp, err := eng.Convert(context.Background(), debris.ConvertRequest{
-			To:         "pixcall",
-			InputPath:  inDir,
-			OutputPath: outDir,
-			DryRun:     true,
-		}, func(ev debris.Event) {
-			events = append(events, ev)
-		})
-		if err != nil {
-			t.Fatalf("dry-run Convert failed: %v", err)
-		}
-		if writerCalled {
-			t.Fatalf("expected writer not to be called during dry-run")
-		}
-		if _, statErr := os.Stat(outDir); !errors.Is(statErr, os.ErrNotExist) {
-			t.Fatalf("expected output directory not to be created during dry-run")
-		}
-		if !resp.DryRun || resp.AssetCount != 2 || resp.TotalBytes != 300 || resp.FolderCount != 2 {
-			t.Fatalf("unexpected dry-run response: %#v", resp)
-		}
-		if len(events) < 2 {
-			t.Fatalf("expected stage events during dry-run, got %#v", events)
-		}
-	})
 
 	t.Run("copy mode, filtering, overwrite, and event tallying", func(t *testing.T) {
 		existingOut := t.TempDir()

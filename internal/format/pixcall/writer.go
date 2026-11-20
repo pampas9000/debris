@@ -103,10 +103,8 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 		return fmt.Errorf("pixcall: generate library uuid: %w", err)
 	}
 
-	if !w.opts.DryRun {
-		if err := w.prepareStorage(ctx, libraryUUID); err != nil {
-			return err
-		}
+	if err := w.prepareStorage(ctx, libraryUUID); err != nil {
+		return err
 	}
 
 	now := time.Now().UTC()
@@ -215,22 +213,20 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 
 		var folderInode *int64
 		var folderMtime *int64
-		if !w.opts.DryRun {
-			var dirParts []string
-			if inTrash {
-				dirParts = append([]string{w.rootPath, ".pixcall", "trash"}, rel...)
-			} else {
-				dirParts = append([]string{w.rootPath}, rel...)
-			}
-			folderDiskPath := filepath.Join(dirParts...)
-			if err := os.MkdirAll(folderDiskPath, 0o755); err != nil {
-				return fmt.Errorf("pixcall: create folder %q: %w", uniqueName, err)
-			}
-			if dirInfo, err := os.Stat(folderDiskPath); err == nil {
-				folderInode = fileInode(dirInfo)
-				ms := dirInfo.ModTime().UnixMilli()
-				folderMtime = &ms
-			}
+		var dirParts []string
+		if inTrash {
+			dirParts = append([]string{w.rootPath, ".pixcall", "trash"}, rel...)
+		} else {
+			dirParts = append([]string{w.rootPath}, rel...)
+		}
+		folderDiskPath := filepath.Join(dirParts...)
+		if err := os.MkdirAll(folderDiskPath, 0o755); err != nil {
+			return fmt.Errorf("pixcall: create folder %q: %w", uniqueName, err)
+		}
+		if dirInfo, err := os.Stat(folderDiskPath); err == nil {
+			folderInode = fileInode(dirInfo)
+			ms := dirInfo.ModTime().UnixMilli()
+			folderMtime = &ms
 		}
 
 		created := df.CreatedAt
@@ -420,36 +416,24 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			fileSize = srcInfo.Size()
 		}
 
-		if w.opts.DryRun {
-			send(format.ProgressEvent{
-				Kind:     "progress",
-				Stage:    "transfer",
-				Current:  int64(idx + 1),
-				Total:    totalAssets,
-				Bytes:    fileSize,
-				AssetID:  a.ID,
-				CopyMode: "skip",
-			})
-		} else {
-			if w.opts.Overwrite && w.opts.CopyMode == format.CopyModeHardlink {
-				if dstInfo, err := os.Stat(dstPath); err == nil && !os.SameFile(srcInfo, dstInfo) {
-					_ = os.Remove(dstPath)
-				}
+		if w.opts.Overwrite && w.opts.CopyMode == format.CopyModeHardlink {
+			if dstInfo, err := os.Stat(dstPath); err == nil && !os.SameFile(srcInfo, dstInfo) {
+				_ = os.Remove(dstPath)
 			}
-			usedMode, err := kit.TransferFile(ctx, a.SourcePath, dstPath, string(w.opts.CopyMode), nil)
-			if err != nil {
-				return fmt.Errorf("pixcall: transfer %q -> %q: %w", a.SourcePath, dstPath, err)
-			}
-			send(format.ProgressEvent{
-				Kind:     "progress",
-				Stage:    "transfer",
-				Current:  int64(idx + 1),
-				Total:    totalAssets,
-				Bytes:    fileSize,
-				AssetID:  a.ID,
-				CopyMode: usedMode,
-			})
 		}
+		usedMode, err := kit.TransferFile(ctx, a.SourcePath, dstPath, string(w.opts.CopyMode), nil)
+		if err != nil {
+			return fmt.Errorf("pixcall: transfer %q -> %q: %w", a.SourcePath, dstPath, err)
+		}
+		send(format.ProgressEvent{
+			Kind:     "progress",
+			Stage:    "transfer",
+			Current:  int64(idx + 1),
+			Total:    totalAssets,
+			Bytes:    fileSize,
+			AssetID:  a.ID,
+			CopyMode: usedMode,
+		})
 
 		entryID := kit.NewSnowflakeID()
 		if a.ID != "" {
@@ -468,13 +452,10 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 		// Record the actual filesystem inode and mtime (epoch ms) of the written target
 		// file so Pixcall's FS scan recognizes every imported entry as unchanged.
 		diskInfo := srcInfo
-		var entryInode *int64
-		if !w.opts.DryRun {
-			if st, err := os.Stat(dstPath); err == nil {
-				diskInfo = st
-			}
-			entryInode = fileInode(diskInfo)
+		if st, err := os.Stat(dstPath); err == nil {
+			diskInfo = st
 		}
+		entryInode := fileInode(diskInfo)
 		mtimeMs := diskInfo.ModTime().UnixMilli()
 		if diskSize := diskInfo.Size(); diskSize > 0 {
 			fileSize = diskSize
@@ -533,9 +514,7 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			IsDeleted:   isDeleted,
 			IsPrivate:   0,
 		})
-		if !w.opts.DryRun {
-			hashTargets = append(hashTargets, fileHashTarget{entryIdx: entryIdx, path: dstPath})
-		}
+		hashTargets = append(hashTargets, fileHashTarget{entryIdx: entryIdx, path: dstPath})
 
 		if medJSON := buildMediaMetadataJSON(a); medJSON != "" {
 			medias = append(medias, model.Media{
@@ -621,15 +600,6 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	for _, df := range orderedFolders {
 		fid := folderIDMap[df.ID]
 		folders = append(folders, *folderModelsMap[fid])
-	}
-
-	if w.opts.DryRun {
-		send(format.ProgressEvent{
-			Kind:    "stage",
-			Stage:   "done",
-			Message: "dry-run complete",
-		})
-		return nil
 	}
 
 	send(format.ProgressEvent{

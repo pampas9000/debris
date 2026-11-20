@@ -93,14 +93,12 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	w.mu.Unlock()
 
 	dbPath := billfishDBPath(w.targetPath)
-	if !w.opts.DryRun {
-		if _, err := os.Stat(dbPath); err == nil {
-			if !w.opts.Overwrite {
-				return fmt.Errorf("billfish: target database %q already exists (set overwrite=true to replace)", dbPath)
-			}
-			for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-				_ = os.Remove(p)
-			}
+	if _, err := os.Stat(dbPath); err == nil {
+		if !w.opts.Overwrite {
+			return fmt.Errorf("billfish: target database %q already exists (set overwrite=true to replace)", dbPath)
+		}
+		for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+			_ = os.Remove(p)
 		}
 	}
 
@@ -119,21 +117,19 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	// 2. Plan folders topologically and compute relative filesystem paths.
 	folderPlan := planFolders(lib.Folders, w.opts.IncludeDeleted, w.opts.IncludeHidden, nowSec, tagIDByName)
 
-	if !w.opts.DryRun {
-		if err := ensureBillfishDirs(w.targetPath); err != nil {
-			return err
+	if err := ensureBillfishDirs(w.targetPath); err != nil {
+		return err
+	}
+	for _, f := range folderPlan.rows {
+		if f.IsRecycle != 0 {
+			continue
 		}
-		for _, f := range folderPlan.rows {
-			if f.IsRecycle != 0 {
-				continue
-			}
-			rel := folderPlan.relPathByNewID[f.ID]
-			if rel == "" {
-				continue
-			}
-			if err := os.MkdirAll(filepath.Join(w.targetPath, rel), 0o755); err != nil {
-				return fmt.Errorf("billfish: create folder dir %q: %w", rel, err)
-			}
+		rel := folderPlan.relPathByNewID[f.ID]
+		if rel == "" {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Join(w.targetPath, rel), 0o755); err != nil {
+			return fmt.Errorf("billfish: create folder dir %q: %w", rel, err)
 		}
 	}
 
@@ -229,19 +225,6 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 				Stage:    "files",
 				Current:  int64(i + 1),
 				Total:    totalAssets,
-				AssetID:  asset.ID,
-				CopyMode: "skip",
-			})
-			continue
-		}
-
-		if w.opts.DryRun {
-			emitEvent(format.ProgressEvent{
-				Kind:     "progress",
-				Stage:    "files",
-				Current:  int64(i + 1),
-				Total:    totalAssets,
-				Bytes:    srcInfo.Size(),
 				AssetID:  asset.ID,
 				CopyMode: "skip",
 			})
@@ -399,10 +382,6 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 				RecycleName:  finalName,
 			})
 		}
-	}
-
-	if w.opts.DryRun {
-		return nil
 	}
 
 	emitEvent(format.ProgressEvent{

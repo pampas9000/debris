@@ -19,8 +19,8 @@ Debris is a cross-platform command-line tool (and JSON-RPC 2.0 stdio server) for
 * **Direct Cross-Format Conversion:** Convert directly between supported formats (e.g., `billfish` → `eagle`, `billfish` → `pixcall`, `eagle` ↔ `pixcall`).
 * **Format Auto-Detection:** Omit `--from` / `--format` and Debris will automatically probe the input library format.
 * **Inspection & Pre-Flight Planning:** Use `inspect` to summarize a library and `plan` to preview asset counts, warnings, and potential compatibility losses before converting.
-* **Flexible Asset Transfer:** Supports `copy`, `hardlink`, and `auto` (`--copy-mode`), along with `--dry-run`, `--overwrite`, `--include-deleted`, `--include-hidden`, and `--name`.
-* **Machine-Readable Output & RPC:** Emit NDJSON progress/result streams with `--json`, or run `debris protocol` for a stateless JSON-RPC 2.0 stdio server.
+* **Flexible Asset Transfer:** Supports `copy`, `hardlink`, and `auto` (`--copy-mode`), along with `--overwrite`, `--include-deleted`, `--include-hidden`, and `--name`.
+* **Machine-Readable Output:** Emit NDJSON progress/result streams with `--json`.
 * **Cross-Platform:** Written in Go (`1.23+`) for macOS, Linux, and Windows.
 
 ## Usage
@@ -41,8 +41,6 @@ debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink
 debris convert -t eagle -i ./pixcall-lib -o ./lib.library
 ```
 
-> **Note:** Root-level flags (`debris --from ... --to ... --input ... --output ...`) are also supported for backward compatibility.
-
 #### Common `convert` Flags
 
 * `--from`, `-f`: Source format (`billfish`, `eagle`, `pixcall`). Auto-detected if omitted.
@@ -50,7 +48,6 @@ debris convert -t eagle -i ./pixcall-lib -o ./lib.library
 * `--input`, `-i`: Input library directory path.
 * `--output`, `-o`: Output library directory path.
 * `--copy-mode`: Asset transfer mode: `auto` (default), `copy`, or `hardlink`.
-* `--dry-run`: Validate and plan without writing target files.
 * `--overwrite`: Overwrite existing target directory contents.
 * `--include-deleted`: Include deleted/trashed items.
 * `--include-hidden`: Include hidden items.
@@ -68,10 +65,4 @@ debris inspect -p ./pixcall-lib --json
 
 ```sh
 debris plan --to pixcall --input ./lib.library --output ./pixcall-lib
-```
-
-### Run JSON-RPC 2.0 Protocol Server
-
-```sh
-debris protocol
 ```
