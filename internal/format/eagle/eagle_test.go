@@ -465,18 +465,26 @@ func TestWriterRoundTripNestedFoldersCopyHardlinkDryRunAndJSONShape(t *testing.T
 		}
 
 		// Verify required Eagle root files exist and have expected JSON shape.
-		for _, name := range []string{"metadata.json", "tags.json", "mtime.json", "saved-filters.json"} {
+		for _, name := range []string{"metadata.json", "tags.json", "mtime.json", "saved-filters.json", "actions.json"} {
 			if _, err := os.Stat(filepath.Join(outDir, name)); err != nil {
 				t.Fatalf("missing root file %s: %v", name, err)
 			}
 		}
 		mtimeRaw, _ := os.ReadFile(filepath.Join(outDir, "mtime.json"))
-		if strings.TrimSpace(string(mtimeRaw)) != "{}" {
-			t.Fatalf("mtime.json = %q, want {}", string(mtimeRaw))
+		var mtimeMap map[string]int64
+		if err := json.Unmarshal(mtimeRaw, &mtimeMap); err != nil {
+			t.Fatalf("unmarshal mtime.json err: %v", err)
+		}
+		if mtimeMap["all"] != 2 || len(mtimeMap) != 3 {
+			t.Fatalf("mtime.json = %v, want 2 item entries plus all=2", mtimeMap)
 		}
 		filtersRaw, _ := os.ReadFile(filepath.Join(outDir, "saved-filters.json"))
 		if strings.TrimSpace(string(filtersRaw)) != "[]" {
 			t.Fatalf("saved-filters.json = %q, want []", string(filtersRaw))
+		}
+		actionsRaw, _ := os.ReadFile(filepath.Join(outDir, "actions.json"))
+		if strings.TrimSpace(string(actionsRaw)) != "[]" {
+			t.Fatalf("actions.json = %q, want []", string(actionsRaw))
 		}
 
 		// Verify palette JSON serializes [3]uint8 as numeric array [88,100,63], not base64.

@@ -73,6 +73,8 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	}
 
 	totalAssets := int64(len(lib.Assets))
+	mtimeIndex := make(map[string]int64, len(lib.Assets)+1)
+	var activeCount int64
 	emitEvent(emit, format.ProgressEvent{
 		Kind:    "stage",
 		Stage:   "assets",
@@ -270,6 +272,11 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			return fmt.Errorf("eagle: write item metadata for %q: %w", asset.ID, err)
 		}
 
+		mtimeIndex[eagleID] = mtime
+		if !asset.IsDeleted {
+			activeCount++
+		}
+
 		emitEvent(emit, format.ProgressEvent{
 			Kind:     "progress",
 			Stage:    "assets",
@@ -316,12 +323,17 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 		return fmt.Errorf("eagle: write tags.json: %w", err)
 	}
 
-	if err := kit.WriteJSON(filepath.Join(w.rootPath, "mtime.json"), map[string]any{}); err != nil {
+	mtimeIndex["all"] = activeCount
+	if err := kit.WriteJSON(filepath.Join(w.rootPath, "mtime.json"), mtimeIndex); err != nil {
 		return fmt.Errorf("eagle: write mtime.json: %w", err)
 	}
 
 	if err := kit.WriteJSON(filepath.Join(w.rootPath, "saved-filters.json"), []any{}); err != nil {
 		return fmt.Errorf("eagle: write saved-filters.json: %w", err)
+	}
+
+	if err := kit.WriteJSON(filepath.Join(w.rootPath, "actions.json"), []any{}); err != nil {
+		return fmt.Errorf("eagle: write actions.json: %w", err)
 	}
 
 	return nil
