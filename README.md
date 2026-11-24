@@ -14,15 +14,18 @@ Debris is a cross-platform Desktop GUI (MyGo + SolidJS) and CLI tool for inspect
 | :--- | :---: | :---: | :--- |
 | **Eagle** (`.library`, 4.x) | ✅ | ✅ | Tested & verified (including Hive compatibility) |
 | **Pixcall** (`.pixcall`, v22) | ✅ | ✅ | Tested & verified (see [Pixcall compatibility notes](docs/pixcall-compatibility.md)) |
+| **Refto** (`.reflib`, v25 / Beta) | ✅ | ✅ | Tested & verified (see [Refto compatibility notes](docs/refto-compatibility.md)) |
 | **Billfish** (`.bf`) | ✅ | ⚠️ Unmaintained | Supported for migrating *out* of Billfish. Billfish is discontinued, so exporting *to* Billfish is not actively maintained. |
+
+For a complete per-platform feature matrix and details on how cross-format differences are handled, see the [Format Compatibility & Feature Handling Guide](docs/format-compatibility.md).
 
 ## Features
 
 * **Desktop GUI (MyGo + SolidJS):** Native cross-platform desktop app for macOS, Windows, and Linux featuring directory auto-detection, live library stats, pre-flight compatibility planning, real-time progress with cancellation, System/Light/Dark themes, and i18n (`English`, `简体中文`, `繁體中文`).
-* **Direct Cross-Format Conversion:** Convert directly between supported formats (e.g., `billfish` → `eagle`, `billfish` → `pixcall`, `eagle` ↔ `pixcall`).
+* **Direct Cross-Format Conversion:** Convert directly between supported formats (e.g., `eagle` ↔ `pixcall` ↔ `refto`, `billfish` → `eagle` / `pixcall` / `refto`).
 * **Format Auto-Detection & Smart Output Paths:** Omit `--from` / `--format` to auto-detect the input library format, and omit `--output` to automatically derive the target path next to the input library.
 * **Inspection & Pre-Flight Planning:** Use `inspect` to summarize a library and `plan` to preview asset counts, warnings, and potential compatibility losses before converting.
-* **Flexible Asset Transfer:** Supports `auto` (default, prefers hardlinks and falls back to copy across volumes), `hardlink`, and `copy` (`--copy-mode`), along with `--overwrite`, `--include-deleted`, `--include-hidden`, and `--name`.
+* **Flexible Asset Transfer:** Supports `auto` (default, prefers hardlinks and falls back to copy across volumes), `hardlink`, and `copy` (`--copy-mode`), along with `--overwrite`, `--include-deleted`, `--include-hidden`, `--include-suggested-tags`, and `--name`.
 * **Script-Friendly Output:** Supports inline TTY progress, `--quiet` (`-q`), and machine-readable JSON / NDJSON output via `--json`.
 
 ## Installation
@@ -44,13 +47,13 @@ Download pre-built binaries and desktop installers from **[GitHub Releases](http
 
 ## Desktop App
 
-1. **Select Source Library:** Click **Browse…** in **Source Library** and pick your existing library folder (`.bf` / `.billfish`, `.library`, or `.pixcall`). Debris automatically detects the format and displays asset, folder, tag, and size statistics.
-2. **Configure Target Output:** Choose the **Target Format** (`Eagle` or `Pixcall`), pick a **Save Location** (parent directory), and adjust the **Library Name (Folder)** if needed.
+1. **Select Source Library:** Click **Browse…** in **Source Library** and pick your existing library folder (`.bf` / `.billfish`, `.library`, `.pixcall`, or `.reflib`). Debris automatically detects the format and displays asset, folder, tag, and size statistics.
+2. **Configure Target Output:** Choose the **Target Format** (`Eagle`, `Pixcall`, or `Refto`), pick a **Save Location** (parent directory), and adjust the **Library Name (Folder)** if needed.
 3. **Choose Transfer Mode & Options:**
    * **Auto** (recommended): Creates hardlinks on the same disk to save space, and automatically falls back to copying across different volumes.
    * **Hardlink**: Zero extra disk usage (requires source and target on the same volume).
    * **Copy**: Duplicates all asset files (safest across drives, uses additional disk space).
-   * Toggle **Overwrite target**, **Include trashed**, or **Include hidden** as needed.
+   * Toggle **Overwrite target**, **Include trashed**, **Include hidden**, or **Include AI-suggested tags** (when supported by the source format) as needed.
 4. **Plan & Convert:** Click **Plan** to preview projected counts and any compatibility notes/losses before touching disk, then click **Convert** to start. You can cancel a running conversion at any time.
 5. **Theme & Language:** Use the top-right controls to switch between **System / Light / Dark** themes and **English / 简体中文 / 繁體中文**.
 
@@ -76,14 +79,15 @@ debris convert ./pixcall-lib -t eagle -q
 
 **`convert` Flags:**
 
-* `--from`, `-f`: Source format (`billfish`, `eagle`, `pixcall`). Auto-detected if omitted.
-* `--to`, `-t`: Destination format (`eagle`, `pixcall`, `billfish`).
+* `--from`, `-f`: Source format (`billfish`, `eagle`, `pixcall`, `refto`). Auto-detected if omitted.
+* `--to`, `-t`: Destination format (`eagle`, `pixcall`, `refto`, `billfish`).
 * `--input`, `-i`: Input library path (can also be passed as the 1st positional argument).
 * `--output`, `-o`: Output library path (can also be passed as the 2nd positional argument; derived from input and `--to` if omitted).
 * `--copy-mode`: Asset transfer mode: `auto` (default), `copy`, or `hardlink`.
 * `--overwrite`: Overwrite existing target directory contents.
 * `--include-deleted`: Include deleted/trashed items.
-* `--include-hidden`: Include hidden items.
+* `--include-hidden`: Include hidden/archived items.
+* `--include-suggested-tags`: Include AI-suggested (unconfirmed) tags when supported by the source format (e.g. Refto).
 * `--name`: Override the target library name.
 * `--quiet`, `-q`: Suppress progress output in non-JSON mode.
 * `--json`: Emit NDJSON progress events and the final result.
@@ -100,7 +104,8 @@ debris inspect -p ./pixcall-lib --json
 * `--path`, `-p`: Library path to inspect (can also be passed as a positional argument).
 * `--format`, `-f`: Source format (auto-detected if omitted).
 * `--include-deleted`: Include deleted/trashed items.
-* `--include-hidden`: Include hidden items.
+* `--include-hidden`: Include hidden/archived items.
+* `--include-suggested-tags`: Include AI-suggested (unconfirmed) tags when supported by the source format.
 * `--json`: Output inspection result as JSON.
 
 ### Preview a Conversion Plan
@@ -125,7 +130,7 @@ debris plan -t pixcall -i ./lib.library -o ./pixcall-lib --json
 * [`pkg/debris/`](pkg/debris/) — Public Go Engine API (`Engine`, `Probe`, `Inspect`, `Plan`, `Convert`)
 * [`internal/domain/`](internal/domain/) — Unified domain model (`Library`, `Asset`, `Folder`, `Tag`)
 * [`internal/engine/`](internal/engine/) — Conversion runner, pre-flight planner, and format registry
-* [`internal/format/`](internal/format/) — Format adapters (`eagle`, `pixcall`, `billfish`)
+* [`internal/format/`](internal/format/) — Format adapters (`eagle`, `pixcall`, `refto`, `billfish`)
 * [`gui/`](gui/) — Desktop GUI built with **MyGo** + **SolidJS** + **Tailwind CSS v4** + **Vite**
 
 ### Build & Test CLI

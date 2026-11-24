@@ -14,15 +14,18 @@ Debris 是一款跨平台桌面端 GUI 应用（基于 MyGo + SolidJS）与命�
 | :--- | :---: | :---: | :--- |
 | **Eagle** (`.library`, 4.x) | ✅ | ✅ | 已测试验证可用（含 Hive 兼容） |
 | **Pixcall** (`.pixcall`, v22) | ✅ | ✅ | 已测试验证可用（详见 [Pixcall 兼容说明](../pixcall-compatibility.md)） |
+| **Refto** (`.reflib`, v25 / Beta) | ✅ | ✅ | 已测试验证可用（详见 [Refto 兼容说明](../refto-compatibility.md)） |
 | **Billfish** (`.bf`) | ✅ | ⚠️ 不再维护 | 支持从 Billfish 迁出。由于 Billfish 已停止更新与维护，导出为 Billfish 不再积极维护。 |
+
+关于各平台支持的特性矩阵以及跨格式迁移时的兼容处理细节，详见 [各平台特性支持与跨格式处理指南](../format-compatibility.md)。
 
 ## 功能特性
 
 * **桌面端 GUI（MyGo + SolidJS）：** 原生跨平台桌面应用（支持 macOS、Windows 和 Linux），提供目录自动探测与库统计预览、转换预检（含兼容损耗提示）、实时进度展示与随时取消、跟随系统/浅色/深色主题切换，以及多语言界面（简体中文、繁體中文、English）。
-* **跨格式直接转换：** 在支持的格式之间直接转换（例如 `billfish` → `eagle`、`billfish` → `pixcall`、`eagle` ↔ `pixcall`）。
+* **跨格式直接转换：** 在支持的格式之间直接转换（例如 `eagle` ↔ `pixcall` ↔ `refto`、`billfish` → `eagle` / `pixcall` / `refto`）。
 * **自动识别与智能输出路径：** 省略 `--from` / `--format` 时自动探测输入素材库格式；省略 `--output` 时根据输入路径与 `--to` 自动推导目标输出目录。
 * **检查与转换规划：** 使用 `inspect` 查看素材库摘要；使用 `plan` 在实际转换前预览资产数量、警告信息以及潜在的兼容性损失。
-* **灵活的素材传输模式：** 支持 `auto`（默认，同磁盘优先硬链接，跨磁盘自动回退为复制）、`hardlink` 和 `copy`（`--copy-mode`），并提供 `--overwrite`、`--include-deleted`、`--include-hidden` 和 `--name` 等选项。
+* **灵活的素材传输模式：** 支持 `auto`（默认，同磁盘优先硬链接，跨磁盘自动回退为复制）、`hardlink` 和 `copy`（`--copy-mode`），并提供 `--overwrite`、`--include-deleted`、`--include-hidden`、`--include-suggested-tags` 和 `--name` 等选项。
 * **脚本友好输出：** 支持 TTY 行内进度展示、`--quiet`（`-q`）静默进度，以及通过 `--json` 输出结构化 JSON / NDJSON 日志。
 
 ## 安装
@@ -44,13 +47,13 @@ Debris 是一款跨平台桌面端 GUI 应用（基于 MyGo + SolidJS）与命�
 
 ## 桌面应用
 
-1. **选择源素材库：** 在**源素材库**卡片中点击**选择目录**，选中现有库目录（`.bf` / `.billfish`、`.library` 或 `.pixcall`）。Debris 会自动识别格式并展示资产数、文件夹数、标签数与总体积。
-2. **设置目标输出：** 选择**目标格式**（`Eagle` 或 `Pixcall`）、**保存位置**（父目录），并按需修改**目标库名称（文件夹名）**。
+1. **选择源素材库：** 在**源素材库**卡片中点击**选择目录**，选中现有库目录（`.bf` / `.billfish`、`.library`、`.pixcall` 或 `.reflib`）。Debris 会自动识别格式并展示资产数、文件夹数、标签数与总体积。
+2. **设置目标输出：** 选择**目标格式**（`Eagle`、`Pixcall` 或 `Refto`）、**保存位置**（父目录），并按需修改**目标库名称（文件夹名）**。
 3. **选择传输模式与迁移选项：**
    * **自动**（推荐）：同磁盘优先创建硬链接节省空间，跨磁盘自动回退为复制。
    * **硬链接**：不额外占用磁盘空间（要求源库与目标库位于同一磁盘）。
    * **复制**：完整复制所有素材文件（跨盘最稳妥，会占用额外磁盘空间）。
-   * 按需勾选**覆盖已有目标目录**、**包含回收站项目**或**包含隐藏项目**。
+   * 按需勾选**覆盖已有目标目录**、**包含回收站项目**、**包含隐藏项目**或**包含 AI 建议标签**（当来源格式支持时显示）。
 4. **预检与转换：** 点击**预检**可在写入磁盘前预览预计迁移数量及兼容性提示；确认无误后点击**开始转换**，转换过程中可随时点击**取消**中断。
 5. **主题与语言：** 可通过右上角控件切换**跟随系统 / 浅色模式 / 深色模式**及界面语言（**简体中文 / 繁體中文 / English**）。
 
@@ -76,14 +79,15 @@ debris convert ./pixcall-lib -t eagle -q
 
 **`convert` 参数：**
 
-* `--from`, `-f`：来源格式（`billfish`、`eagle`、`pixcall`），省略时自动探测。
-* `--to`, `-t`：目标格式（`eagle`、`pixcall`、`billfish`）。
+* `--from`, `-f`：来源格式（`billfish`、`eagle`、`pixcall`、`refto`），省略时自动探测。
+* `--to`, `-t`：目标格式（`eagle`、`pixcall`、`refto`、`billfish`）。
 * `--input`, `-i`：输入素材库路径（也可作为第 1 个位置参数传入）。
 * `--output`, `-o`：输出素材库路径（也可作为第 2 个位置参数传入；省略时根据输入路径与 `--to` 自动推导）。
 * `--copy-mode`：素材传输模式：`auto`（默认）、`copy` 或 `hardlink`。
 * `--overwrite`：允许覆盖已存在的目标目录内容。
 * `--include-deleted`：包含已删除 / 回收站中的项目。
-* `--include-hidden`：包含隐藏项目。
+* `--include-hidden`：包含隐藏 / 归档项目。
+* `--include-suggested-tags`：包含源格式（如 Refto）中的 AI 建议（未确认）标签。
 * `--name`：自定义目标素材库名称。
 * `--quiet`, `-q`：在非 JSON 模式下隐藏进度输出。
 * `--json`：以 NDJSON 格式输出进度事件与最终结果。
@@ -100,7 +104,8 @@ debris inspect -p ./pixcall-lib --json
 * `--path`, `-p`：待检查的素材库路径（也可直接作为位置参数传入）。
 * `--format`, `-f`：来源格式（省略时自动探测）。
 * `--include-deleted`：包含已删除 / 回收站中的项目。
-* `--include-hidden`：包含隐藏项目。
+* `--include-hidden`：包含隐藏 / 归档项目。
+* `--include-suggested-tags`：包含源格式（如 Refto）中的 AI 建议标签。
 * `--json`：以 JSON 格式输出检查结果。
 
 ### 预览转换计划
@@ -125,7 +130,7 @@ debris plan -t pixcall -i ./lib.library -o ./pixcall-lib --json
 * [`pkg/debris/`](../../pkg/debris/) — 对外暴露的 Go 引擎 API（`Engine`、`Probe`、`Inspect`、`Plan`、`Convert`）
 * [`internal/domain/`](../../internal/domain/) — 统一领域模型（`Library`、`Asset`、`Folder`、`Tag`）
 * [`internal/engine/`](../../internal/engine/) — 转换执行器、预检规划器与格式注册表
-* [`internal/format/`](../../internal/format/) — 各格式适配器（`eagle`、`pixcall`、`billfish`）
+* [`internal/format/`](../../internal/format/) — 各格式适配器（`eagle`、`pixcall`、`refto`、`billfish`）
 * [`gui/`](../../gui/) — 基于 **MyGo** + **SolidJS** + **Tailwind CSS v4** + **Vite** 的桌面端 GUI
 
 ### 构建与测试 CLI
