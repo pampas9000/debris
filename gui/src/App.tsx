@@ -4,6 +4,7 @@ import {
   CircleCheck,
   ClipboardCheck,
   Folder,
+  FolderInput,
   FolderOpen,
   HardDrive,
   Image,
@@ -17,6 +18,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide";
+import { isMyGo, onFileDrop } from "mygo-runtime";
 import { For, Show, createMemo, createSignal, createStore, onSettled } from "solid-js";
 import { DebrisService, events } from "../mygo";
 import { Alert } from "./components/ui/alert";
@@ -117,6 +119,33 @@ function formatLoss(msg: string): string {
   return key ? t(key) : msg;
 }
 
+type DropZone = "source" | "output";
+
+function DropOverlay(props: { show: boolean; label: string }) {
+  return (
+    <Show when={props.show}>
+      <div class="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary bg-card/90 px-4 text-center backdrop-blur-[2px]">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/12 text-primary">
+          <Icon icon={FolderInput} size={20} />
+        </span>
+        <span class="text-xs font-medium text-foreground">{props.label}</span>
+      </div>
+    </Show>
+  );
+}
+
+function resolveDropZone(target: EventTarget | null, x?: number, y?: number): DropZone | "" {
+  if (target instanceof Element) {
+    const zone = target.closest<HTMLElement>("[data-dropzone]")?.dataset.dropzone;
+    if (zone === "source" || zone === "output") return zone;
+  }
+  if (x !== undefined && y !== undefined) {
+    const zone = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-dropzone]")?.dataset.dropzone;
+    if (zone === "source" || zone === "output") return zone;
+  }
+  return "";
+}
+
 function ThemeIcon(props: { mode: "system" | "light" | "dark" }) {
   const icon = () => (props.mode === "dark" ? Moon : props.mode === "light" ? Sun : Monitor);
   return <Icon icon={icon()} size={14} />;
@@ -144,6 +173,8 @@ export default function App() {
   const [result, setResult] = createSignal<ConvertResponse | null>(null);
   const [errorMsg, setErrorMsg] = createSignal("");
   const [busyAction, setBusyAction] = createSignal<"" | "inspect" | "plan">("");
+  const [isDraggingFiles, setIsDraggingFiles] = createSignal(false);
+  const [activeDropZone, setActiveDropZone] = createSignal<DropZone | "">("");
 
   const [progress, setProgress] = createStore({
     running: false,
@@ -268,25 +299,113 @@ export default function App() {
         setErrorMsg(String(err));
       });
 
-    const unlisten = events.convertEvent.on((ev) => {
-      if (ev.kind === "stage") {
-        setProgress((s) => {
-          s.stage = ev.stage ?? "";
-        });
-      } else if (ev.kind === "progress") {
-        setProgress((s) => {
-          if (ev.stage) s.stage = ev.stage;
-          s.current = ev.current ?? 0;
-          s.total = ev.total ?? 0;
-        });
-      } else if (ev.kind === "warning" && ev.message) {
-        setProgress((s) => {
-          s.warnings.push(ev.message!);
-        });
+    const cleanups: (() => void)[] = [];
+    let internalDrag = false;
+
+    const clearDragState = () => {
+      setIsDraggingFiles(false);
+      setActiveDropZone("");
+    };
+
+    const isFileDragEvent = (e: DragEvent) =>
+      !internalDrag && Boolean(e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files"));
+
+    const handleDragStart = () => {
+      internalDrag = true;
+    };
+
+    const handleDragEnd = () => {
+      internalDrag = false;
+      clearDragState();
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (progress.running || busyAction() || !isFileDragEvent(e)) {
+        clearDragState();
+        return;
       }
+      setIsDraggingFiles(true);
+      const zone = resolveDropZone(e.target, e.clientX, e.clientY);
+      setActiveDropZone(zone);
+      if (zone) {
+        e.preventDefault();
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = "copy";
+        }
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      const nextTarget = e.relatedTarget;
+      const leftWindow =
+        nextTarget === null ||
+        !(nextTarget instanceof Node) ||
+        !document.documentElement.contains(nextTarget);
+      if (leftWindow) {
+        clearDragState();
+      }
+    };
+
+    const handleDomDrop = (e: DragEvent) => {
+      const zone = resolveDropZone(e.target, e.clientX, e.clientY);
+      if (zone && isFileDragEvent(e)) {
+        e.preventDefault();
+      }
+      clearDragState();
+    };
+
+    window.addEventListener("dragstart", handleDragStart, true);
+    window.addEventListener("dragend", handleDragEnd, true);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("drop", handleDomDrop);
+    window.addEventListener("blur", clearDragState);
+    cleanups.push(() => {
+      window.removeEventListener("dragstart", handleDragStart, true);
+      window.removeEventListener("dragend", handleDragEnd, true);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("drop", handleDomDrop);
+      window.removeEventListener("blur", clearDragState);
     });
 
-    return () => unlisten();
+    if (isMyGo()) {
+      cleanups.push(
+        events.convertEvent.on((ev) => {
+          if (ev.kind === "stage") {
+            setProgress((s) => {
+              s.stage = ev.stage ?? "";
+            });
+          } else if (ev.kind === "progress") {
+            setProgress((s) => {
+              if (ev.stage) s.stage = ev.stage;
+              s.current = ev.current ?? 0;
+              s.total = ev.total ?? 0;
+            });
+          } else if (ev.kind === "warning" && ev.message) {
+            setProgress((s) => {
+              s.warnings.push(ev.message!);
+            });
+          }
+        })
+      );
+
+      cleanups.push(
+        onFileDrop(({ paths, x, y }) => {
+          clearDragState();
+          if (progress.running || busyAction() || paths.length === 0) return;
+          const zone = resolveDropZone(null, x, y);
+          if (!zone) return;
+          void handleDrop(zone, paths[0]);
+        })
+      );
+    }
+
+    return () => {
+      for (const unlisten of cleanups) {
+        unlisten();
+      }
+    };
   });
 
   async function refreshInspect(path: string, detectedFormat?: string) {
@@ -308,14 +427,11 @@ export default function App() {
     }
   }
 
-  async function pickSource() {
-    setErrorMsg("");
-    const path = await DebrisService.pickDirectory(t("sourceEmptyTitle"));
-    if (!path) return;
+  async function applySourcePath(path: string) {
     setInputPath(path);
     setSourceFormat("");
-    setPlanInfo(null);
-    setResult(null);
+    setInspectInfo(null);
+    resetRunState();
 
     try {
       const probed = await DebrisService.probe({ path });
@@ -336,12 +452,43 @@ export default function App() {
     }
   }
 
+  function applyOutputPath(path: string) {
+    setOutputPath(path);
+    resetRunState();
+  }
+
+  async function handleDrop(zone: DropZone, rawPath: string) {
+    const path = rawPath.trim();
+    if (!path) return;
+    setErrorMsg("");
+    try {
+      const isDir = await DebrisService.isDirectory(path);
+      if (!isDir) {
+        setErrorMsg(t("errDropNotDirectory"));
+        return;
+      }
+      if (zone === "source") {
+        await applySourcePath(path);
+      } else {
+        applyOutputPath(path);
+      }
+    } catch (err) {
+      setErrorMsg(String(err));
+    }
+  }
+
+  async function pickSource() {
+    setErrorMsg("");
+    const path = await DebrisService.pickDirectory(t("sourceEmptyTitle"));
+    if (!path) return;
+    await applySourcePath(path);
+  }
+
   async function pickOutput() {
     setErrorMsg("");
     const path = await DebrisService.pickDirectory(t("outputDirLabel"));
     if (!path) return;
-    setOutputPath(path);
-    resetRunState();
+    applyOutputPath(path);
   }
 
   const resolvedOutputPath = createMemo(() => {
@@ -536,7 +683,17 @@ export default function App() {
           {/* Source -> Target Transfer Pair */}
           <div class="grid grid-cols-1 items-stretch gap-3 md:grid-cols-[1fr_auto_1fr]">
             {/* Source Card */}
-            <Card class="flex flex-col justify-between">
+            <Card
+              data-dropzone="source"
+              class={`relative flex flex-col justify-between transition-colors ${
+                activeDropZone() === "source"
+                  ? "border-primary ring-2 ring-primary/20"
+                  : isDraggingFiles() && !progress.running
+                    ? "border-primary/40 border-dashed"
+                    : ""
+              }`}
+            >
+              <DropOverlay show={activeDropZone() === "source"} label={t("dropSourceOverlay")} />
               <CardHeader class="pb-3">
                 <div class="flex items-center gap-2">
                   <Icon icon={Folder} class="text-muted-foreground" />
@@ -649,7 +806,17 @@ export default function App() {
             </div>
 
             {/* Target Card */}
-            <Card class="flex flex-col justify-between">
+            <Card
+              data-dropzone="output"
+              class={`relative flex flex-col justify-between transition-colors ${
+                activeDropZone() === "output"
+                  ? "border-primary ring-2 ring-primary/20"
+                  : isDraggingFiles() && !progress.running
+                    ? "border-primary/40 border-dashed"
+                    : ""
+              }`}
+            >
+              <DropOverlay show={activeDropZone() === "output"} label={t("dropOutputOverlay")} />
               <CardHeader class="pb-3">
                 <div class="flex items-center gap-2">
                   <Icon icon={Folder} class="text-muted-foreground" />

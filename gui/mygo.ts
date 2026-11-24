@@ -148,6 +148,8 @@ export const DebrisService = {
   formats: bind<[], FormatSpec[]>("DebrisService.Formats", () => []),
   /** Inspect returns a lightweight summary of the library at req.Path. */
   inspect: bind<[InspectRequest], InspectResponse>("DebrisService.Inspect", (req: InspectRequest) => [req]),
+  /** IsDirectory reports whether path exists and refers to a directory. */
+  isDirectory: bind<[string], boolean>("DebrisService.IsDirectory", (path: string) => [path]),
   /** PickDirectory opens a native OS directory picker attached to the caller window. */
   pickDirectory: bind<[string], string>("DebrisService.PickDirectory", (title: string) => [title]),
   /** Plan previews a conversion and reports projected counts, warnings, and compatibility losses. */

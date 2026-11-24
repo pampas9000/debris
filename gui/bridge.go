@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	"debris/pkg/debris"
@@ -42,6 +43,15 @@ func (s *DebrisService) PickDirectory(ctx context.Context, title string) (string
 		return "", err
 	}
 	return paths[0], nil
+}
+
+// IsDirectory reports whether path exists and refers to a directory.
+func (s *DebrisService) IsDirectory(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	return info.IsDir(), nil
 }
 
 // Probe detects the library format at req.Path.
