@@ -278,12 +278,16 @@ func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 			IsDeleted:   isDeleted,
 		})
 
+		folderColor := df.IconColor
+		if folderColor == "" {
+			folderColor = df.Color
+		}
 		fm := &model.Folders{
 			EntryID:   newID,
 			Revision:  1,
 			Ranking:   ranking,
-			Icon:      strPtr(df.Icon),
-			IconColor: strPtr(df.IconColor),
+			Icon:      strPtr(sanitizePixcallFolderIcon(df.Icon)),
+			IconColor: strPtr(sanitizePixcallColor(folderColor)),
 		}
 		if df.Extra != nil {
 			if v, ok := df.Extra["layout"].(string); ok {
@@ -808,7 +812,7 @@ func buildPixcallTagGroups(groups []*domain.TagGroup) ([]model.TagGroups, map[st
 			Revision: 1,
 			Name:     g.Name,
 			Pinyin:   pinyinStr,
-			Color:    strPtr(g.Color),
+			Color:    strPtr(sanitizePixcallColor(g.Color)),
 			Ranking:  ranking,
 		})
 		byName[g.Name] = id
@@ -975,6 +979,166 @@ func sanitizeEntryName(name, fallback string) string {
 	return cleaned
 }
 
+// sanitizePixcallFolderIcon restricts folders.icon to values Pixcall's renderer can display.
+// Pixcall interprets any non-NULL folders.icon either as `:<name>:` (loading custom_icons/<name>.svg)
+// or as dash-separated hex Unicode codepoints passed to `String.fromCodePoint(parseInt(part, 16))`.
+// Non-Pixcall icon identifiers such as Refto's "global" or Eagle's "star" cause parseInt to return
+// NaN and throw an uncaught RangeError during React render (blank white screen).
+func sanitizePixcallFolderIcon(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	if len(s) >= 3 && strings.HasPrefix(s, ":") && strings.HasSuffix(s, ":") {
+		inner := s[1 : len(s)-1]
+		if isValidPixcallCustomIconName(inner) {
+			return s
+		}
+		return ""
+	}
+	parts := strings.Split(s, "-")
+	if len(parts) < 1 || len(parts) > 10 {
+		return ""
+	}
+	var firstCP uint64
+	for i, part := range parts {
+		if len(part) < 2 || len(part) > 6 {
+			return ""
+		}
+		cp, err := strconv.ParseUint(part, 16, 32)
+		if err != nil || cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF) {
+			return ""
+		}
+		if i == 0 {
+			firstCP = cp
+		}
+	}
+	if !isEmojiHexBase(firstCP, len(parts)) {
+		return ""
+	}
+	return strings.ToLower(s)
+}
+
+func isValidPixcallCustomIconName(inner string) bool {
+	if inner == "" || strings.Contains(inner, "..") {
+		return false
+	}
+	for i := range len(inner) {
+		c := inner[i]
+		isValid := (c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '_' || c == '@' || c == '.' || c == '-'
+		if !isValid {
+			return false
+		}
+	}
+	return true
+}
+
+func isEmojiHexBase(cp uint64, partCount int) bool {
+	if (cp >= 0x1F000 && cp <= 0x1FAFF) || (cp >= 0x203C && cp <= 0x3299) || cp == 0x00A9 || cp == 0x00AE {
+		return true
+	}
+	if partCount >= 2 && (cp == 0x0023 || cp == 0x002A || (cp >= 0x0030 && cp <= 0x0039)) {
+		return true
+	}
+	return false
+}
+
+type pixcallNamedColor struct {
+	name    string
+	r, g, b int
+}
+
+// pixcallColorPalette mirrors Pixcall renderer's W0 color map.
+var pixcallColorPalette = []pixcallNamedColor{
+	{name: "aqua", r: 0x5f, g: 0xcb, b: 0xed},
+	{name: "blue", r: 0x3f, g: 0x81, b: 0xff},
+	{name: "purple", r: 0x84, g: 0x73, b: 0xff},
+	{name: "orange", r: 0xff, g: 0x92, b: 0x13},
+	{name: "gray", r: 0xd4, g: 0xd4, b: 0xd4},
+	{name: "yellow", r: 0xff, g: 0xcc, b: 0x0f},
+	{name: "pink", r: 0xff, g: 0x5e, b: 0x8e},
+	{name: "green", r: 0x7a, g: 0xcf, b: 0x25},
+	{name: "red", r: 0xf2, g: 0x55, b: 0x55},
+}
+
+var pixcallColorAliases = map[string]string{
+	"grey":    "gray",
+	"cyan":    "aqua",
+	"teal":    "aqua",
+	"violet":  "purple",
+	"indigo":  "purple",
+	"magenta": "pink",
+	"rose":    "pink",
+	"amber":   "yellow",
+	"gold":    "yellow",
+	"lime":    "green",
+	"emerald": "green",
+}
+
+// sanitizePixcallColor maps incoming color strings to Pixcall's 9 supported named colors
+// (or empty string / NULL when unrecognized or neutral gray).
+func sanitizePixcallColor(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" {
+		return ""
+	}
+	for _, c := range pixcallColorPalette {
+		if s == c.name {
+			return s
+		}
+	}
+	if alias, ok := pixcallColorAliases[s]; ok {
+		return alias
+	}
+	if strings.HasPrefix(s, "#") {
+		r, g, b, ok := parseHexRGB(s[1:])
+		if !ok {
+			return ""
+		}
+		bestName := ""
+		bestDist := int(^uint(0) >> 1)
+		for _, c := range pixcallColorPalette {
+			dr, dg, db := r-c.r, g-c.g, b-c.b
+			dist := dr*dr + dg*dg + db*db
+			if dist < bestDist {
+				bestDist = dist
+				bestName = c.name
+			}
+		}
+		if bestName == "gray" {
+			return ""
+		}
+		return bestName
+	}
+	return ""
+}
+
+func parseHexRGB(hex string) (r, g, b int, ok bool) {
+	switch len(hex) {
+	case 3:
+		rv, err1 := strconv.ParseInt(hex[0:1], 16, 32)
+		gv, err2 := strconv.ParseInt(hex[1:2], 16, 32)
+		bv, err3 := strconv.ParseInt(hex[2:3], 16, 32)
+		if err1 != nil || err2 != nil || err3 != nil {
+			return 0, 0, 0, false
+		}
+		return int(rv * 17), int(gv * 17), int(bv * 17), true
+	case 6, 8:
+		rv, err1 := strconv.ParseInt(hex[0:2], 16, 32)
+		gv, err2 := strconv.ParseInt(hex[2:4], 16, 32)
+		bv, err3 := strconv.ParseInt(hex[4:6], 16, 32)
+		if err1 != nil || err2 != nil || err3 != nil {
+			return 0, 0, 0, false
+		}
+		return int(rv), int(gv), int(bv), true
+	default:
+		return 0, 0, 0, false
+	}
+}
+
 func disambiguateName(used map[string]struct{}, name string, preserveExt bool) string {
 	lower := strings.ToLower(name)
 	if _, exists := used[lower]; !exists {
@@ -1057,11 +1221,8 @@ func buildEntryMetadataJSON(a *domain.Asset, created, modified time.Time) string
 }
 
 func buildMediaMetadataJSON(a *domain.Asset) string {
-	hasMediaFields := a.Kind == domain.KindVideo || a.Kind == domain.KindAudio || a.DurationSec > 0
-	if a.MediaMeta != nil && (a.MediaMeta.Bitrate > 0 || a.MediaMeta.Rotation != 0 || a.MediaMeta.Format != "") {
-		hasMediaFields = true
-	}
-	if !hasMediaFields {
+	isAV := a.Kind == domain.KindVideo || a.Kind == domain.KindAudio || a.DurationSec > 0
+	if !isAV {
 		return ""
 	}
 

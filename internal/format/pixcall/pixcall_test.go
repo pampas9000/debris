@@ -483,3 +483,174 @@ func TestWriterEdgeCasesAndRoundTrip(t *testing.T) {
 		t.Fatalf("deduplicated tags mismatch: groups=%d tags=%d", len(allLib.TagGroups), len(allLib.Tags))
 	}
 }
+
+func TestWriterSanitizesFolderIconColorAndMedia(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	imgPath := filepath.Join(srcDir, "photo.heic")
+	pdfPath := filepath.Join(srcDir, "doc.pdf")
+	vidPath := filepath.Join(srcDir, "clip.mov")
+	for _, p := range []string{imgPath, pdfPath, vidPath} {
+		if err := os.WriteFile(p, []byte("payload:"+filepath.Base(p)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	lib := &domain.Library{
+		Name: "SanitizeTest",
+		TagGroups: []*domain.TagGroup{
+			{ID: "g1", Name: "蓝色组", Color: "#3070e0"},
+			{ID: "g2", Name: "红色组", Color: "#f25555"},
+			{ID: "g3", Name: "无效组", Color: "not-a-color"},
+			{ID: "g4", Name: "灰组", Color: "#d4d4d4"},
+		},
+		Folders: []*domain.Folder{
+			{ID: "f_refto", Name: "ReftoGlobal", Icon: "global", Color: "#3070e0"},
+			{ID: "f_eagle", Name: "EagleStar", Icon: "star", IconColor: "unknown"},
+			{ID: "f_hexword", Name: "HexWord", Icon: "cafe"},
+			{ID: "f_num", Name: "BillfishNum", Icon: "12"},
+			{ID: "f_svg", Name: "BuiltinSVG", Icon: ":script:", IconColor: "purple"},
+			{ID: "f_emoji1", Name: "EmojiSingle", Icon: "1F600", IconColor: "RED"},
+			{ID: "f_emoji2", Name: "EmojiMulti", Icon: "1f576-fe0f", IconColor: "grey"},
+			{ID: "f_keycap", Name: "EmojiKeycap", Icon: "0031-fe0f-20e3"},
+		},
+		Assets: []*domain.Asset{
+			{
+				ID:         "a_img",
+				FileName:   "photo.heic",
+				SourcePath: imgPath,
+				Kind:       domain.KindImage,
+				Width:      4000,
+				Height:     3000,
+				CreatedAt:  now,
+				ModifiedAt: now,
+				MediaMeta:  &domain.MediaMeta{Format: "heic"},
+			},
+			{
+				ID:         "a_pdf",
+				FileName:   "doc.pdf",
+				SourcePath: pdfPath,
+				Kind:       domain.KindOther,
+				CreatedAt:  now,
+				ModifiedAt: now,
+				MediaMeta:  &domain.MediaMeta{Format: "pdf"},
+			},
+			{
+				ID:          "a_vid",
+				FileName:    "clip.mov",
+				SourcePath:  vidPath,
+				Kind:        domain.KindVideo,
+				Width:       1920,
+				Height:      1080,
+				DurationSec: 2.5,
+				CreatedAt:   now,
+				ModifiedAt:  now,
+				MediaMeta:   &domain.MediaMeta{Format: "mov,mp4,m4a,3gp,3g2,mj2", Bitrate: 1000000},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	outDir := filepath.Join(tmpDir, "out.pixcall")
+	adapter := pixcall.New()
+	writer, err := adapter.OpenWriter(ctx, outDir, format.WriteOptions{CopyMode: format.CopyModeCopy})
+	if err != nil {
+		t.Fatalf("OpenWriter: %v", err)
+	}
+	if err := writer.Write(ctx, lib, nil); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	db, closer, err := kit.OpenReadOnly(filepath.Join(outDir, ".pixcall", "database", "main.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = closer.Close() }()
+
+	type folderRow struct {
+		Name      string
+		Icon      *string
+		IconColor *string
+	}
+	var folderRows []folderRow
+	if err := db.Table("folders").
+		Select("entries.name AS name, folders.icon AS icon, folders.icon_color AS icon_color").
+		Joins("JOIN entries ON entries.id = folders.entry_id").
+		Where("entries.id > ?", 2).
+		Find(&folderRows).Error; err != nil {
+		t.Fatalf("query folders: %v", err)
+	}
+	gotFolders := make(map[string]folderRow, len(folderRows))
+	for _, r := range folderRows {
+		gotFolders[r.Name] = r
+	}
+
+	deref := func(p *string) string {
+		if p == nil {
+			return "<nil>"
+		}
+		return *p
+	}
+	wantFolders := map[string][2]string{
+		"ReftoGlobal": {"<nil>", "blue"},
+		"EagleStar":   {"<nil>", "<nil>"},
+		"HexWord":     {"<nil>", "<nil>"},
+		"BillfishNum": {"<nil>", "<nil>"},
+		"BuiltinSVG":  {":script:", "purple"},
+		"EmojiSingle": {"1f600", "red"},
+		"EmojiMulti":  {"1f576-fe0f", "gray"},
+		"EmojiKeycap": {"0031-fe0f-20e3", "<nil>"},
+	}
+	for name, want := range wantFolders {
+		row, ok := gotFolders[name]
+		if !ok {
+			t.Fatalf("missing folder %q in DB", name)
+		}
+		if gotIcon, gotColor := deref(row.Icon), deref(row.IconColor); gotIcon != want[0] || gotColor != want[1] {
+			t.Errorf("folder %q: got (icon=%q, color=%q), want (%q, %q)", name, gotIcon, gotColor, want[0], want[1])
+		}
+	}
+
+	var groupRows []model.TagGroups
+	if err := db.Find(&groupRows).Error; err != nil {
+		t.Fatalf("query tag_groups: %v", err)
+	}
+	gotGroups := make(map[string]string, len(groupRows))
+	for _, g := range groupRows {
+		gotGroups[g.Name] = deref(g.Color)
+	}
+	wantGroups := map[string]string{
+		"蓝色组": "blue",
+		"红色组": "red",
+		"无效组": "<nil>",
+		"灰组":  "<nil>",
+	}
+	for name, want := range wantGroups {
+		if got := gotGroups[name]; got != want {
+			t.Errorf("tag_group %q color = %q, want %q", name, got, want)
+		}
+	}
+
+	type mediaEntryRow struct {
+		Name string
+		Kind string
+	}
+	var mediaRows []mediaEntryRow
+	if err := db.Table("media").
+		Select("entries.name AS name, entries.content_type AS kind").
+		Joins("JOIN entries ON entries.id = media.entry_id").
+		Find(&mediaRows).Error; err != nil {
+		t.Fatalf("query media: %v", err)
+	}
+	if len(mediaRows) != 1 || mediaRows[0].Name != "clip.mov" {
+		t.Fatalf("media table rows = %+v, want only clip.mov", mediaRows)
+	}
+}

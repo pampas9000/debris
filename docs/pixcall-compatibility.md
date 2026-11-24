@@ -55,3 +55,17 @@ Pixcall 桌面端校验与打开素材库时（`ValidateLibrary` / `open_metadat
 - 写入资产条目时，通过 `kit.AssignSnowflakeIDs` 依据每个资产的 `CreatedAt`（零值回退为当前时间）按时间升序生成 `entries.id`，保证 `id` 顺序与 `created_at` 严格一致，并与 Pixcall 后续新导入条目的 `id` 处于同一时间轴。
 - 对于早于或等于 `2021-11-11T11:11:11Z` 的历史时间戳，按时间升序映射到 `[1000, 1<<22)` 区间，既避开根目录/回收站保留 ID（`1`、`2`），又保证严格小于所有纪元后的 ID。
 - `AssignSnowflakeIDs` 使用与 `NewSnowflakeID()` 互斥的 `workerID`（翻转 bit 0），避免与文件夹、标签等条目发生主键冲突。
+
+## 5. 文件夹图标、颜色枚举与 `media` 表约束
+
+**原因**：
+
+- **`folders.icon`**：Pixcall 前端渲染文件夹图标时（`p3`）假定非空值要么是内置 SVG 标识 `:<name>:`（加载 `custom_icons/<name>.svg`），要么是用连字符分隔的十六进制 Unicode 码点序列（例如 `1f600`、`1f576-fe0f`），并直接调用 `String.fromCodePoint(parseInt(part, 16))`。若将 Refto（如 `global`）、Eagle（如 `star`）或 Billfish（纯数字 ID）的图标名原样写入 `folders.icon`，`parseInt` 会返回 `NaN`，导致前端在渲染侧边栏时抛出未捕获的 `RangeError: Invalid code point NaN`，整个窗口直接白屏。
+- **`folders.icon_color` 与 `tag_groups.color`**：Pixcall 颜色映射表（`W0`）仅识别 9 个命名颜色（`aqua`、`blue`、`purple`、`orange`、`gray`、`yellow`、`pink`、`green`、`red`）或 `NULL`。若直接写入 `#3070e0` 等十六进制色值或未知名称，`W0` 查表返回 `null` 后会引发前端颜色解析异常。
+- **`media` 表**：`media` 表仅用于音视频资产（包含 `streams` 等音视频流信息）。若因图片/PDF 携带了容器格式字段（如 Refto 写入 `MediaMeta.Format = "heic" / "pdf"`）而向 `media` 表插入无 `streams` 的占位记录，会与 Pixcall 原生数据结构不一致。
+
+**约定**（见 [writer.go](../internal/format/pixcall/writer.go)）：
+
+- `sanitizePixcallFolderIcon` 仅保留合法的 `:<name>:` 内置图标或有效的 Emoji 十六进制码点序列，其余非兼容图标值统一置为 `NULL`（使用 Pixcall 默认文件夹图标）。
+- `sanitizePixcallColor` 仅保留上述 9 种内置命名颜色及常见别名，十六进制颜色会按 RGB 欧氏距离映射至最接近的内置命名颜色（接近中性灰时置为 `NULL`），其余未知值置为 `NULL`。
+- `buildMediaMetadataJSON` 仅在资产为音频/视频（`KindVideo`、`KindAudio` 或 `DurationSec > 0`）时写入 `media` 表，不再为图片或文档资产生成 `media` 记录。
