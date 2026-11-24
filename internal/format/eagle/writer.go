@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"slices"
@@ -44,7 +47,7 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 	})
 
 	eagleFolders, folderIDMap := buildEagleFolders(lib.Folders, usedIDs, nowMs)
-	tagNameByID, historyTags, historySeen, tagsGroups := buildEagleTags(lib, usedIDs)
+	tagNameByID, historyTags, historySeen, starredTags, tagsGroups := buildEagleTags(lib, usedIDs)
 
 	addHistoryTag := func(name string) {
 		name = strings.TrimSpace(name)
@@ -187,7 +190,7 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 		if asset.MediaMeta != nil && strings.TrimSpace(asset.MediaMeta.ThumbnailPath) != "" {
 			if thumbInfo, err := os.Stat(asset.MediaMeta.ThumbnailPath); err == nil && !thumbInfo.IsDir() {
 				thumbDst := filepath.Join(infoDir, baseName+"_thumbnail.png")
-				if _, thumbErr := kit.TransferFile(ctx, asset.MediaMeta.ThumbnailPath, thumbDst, string(w.opts.CopyMode), nil); thumbErr != nil {
+				if thumbErr := writeEagleThumbnail(ctx, asset.MediaMeta.ThumbnailPath, thumbDst, string(w.opts.CopyMode)); thumbErr != nil {
 					if ctx.Err() != nil {
 						return thumbErr
 					}
@@ -299,7 +302,7 @@ func (w *writer) Write(ctx context.Context, lib *domain.Library, emit format.Pro
 
 	tagsFile := model.TagsFile{
 		HistoryTags: historyTags,
-		StarredTags: make([]string, 0),
+		StarredTags: starredTags,
 	}
 	if err := kit.WriteJSON(filepath.Join(w.rootPath, "tags.json"), tagsFile); err != nil {
 		return fmt.Errorf("eagle: write tags.json: %w", err)
@@ -451,11 +454,14 @@ func buildEagleTags(lib *domain.Library, usedIDs map[string]struct{}) (
 	tagNameByID map[string]string,
 	historyTags []string,
 	historySeen map[string]struct{},
+	starredTags []string,
 	tagsGroups []model.TagGroup,
 ) {
 	tagNameByID = make(map[string]string, len(lib.Tags))
 	historyTags = make([]string, 0, len(lib.Tags))
 	historySeen = make(map[string]struct{}, len(lib.Tags))
+	starredTags = make([]string, 0)
+	starredSeen := make(map[string]struct{})
 	tagsByGroup := make(map[string][]string)
 
 	for _, t := range lib.Tags {
@@ -475,6 +481,12 @@ func buildEagleTags(lib *domain.Library, usedIDs map[string]struct{}) (
 		if _, ok := historySeen[name]; !ok {
 			historySeen[name] = struct{}{}
 			historyTags = append(historyTags, name)
+		}
+		if t.Starred {
+			if _, ok := starredSeen[name]; !ok {
+				starredSeen[name] = struct{}{}
+				starredTags = append(starredTags, name)
+			}
 		}
 		if t.GroupID != "" {
 			tagsByGroup[t.GroupID] = append(tagsByGroup[t.GroupID], name)
@@ -511,7 +523,50 @@ func buildEagleTags(lib *domain.Library, usedIDs map[string]struct{}) (
 		})
 	}
 
-	return tagNameByID, historyTags, historySeen, tagsGroups
+	return tagNameByID, historyTags, historySeen, starredTags, tagsGroups
+}
+
+func writeEagleThumbnail(ctx context.Context, src, dst, copyMode string) error {
+	ext := strings.ToLower(filepath.Ext(src))
+	if ext != ".jpg" && ext != ".jpeg" {
+		_, err := kit.TransferFile(ctx, src, dst, copyMode, nil)
+		return err
+	}
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	img, _, err := image.Decode(f)
+	if err != nil {
+		return fmt.Errorf("decode thumbnail %q: %w", src, err)
+	}
+
+	out, err := os.CreateTemp(filepath.Dir(dst), ".debris-thumb-*.png")
+	if err != nil {
+		return err
+	}
+	tmpPath := out.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := png.Encode(out, img); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, dst); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }
 
 func resolveWriteNameAndExt(asset *domain.Asset, fallbackName string) (baseName, ext string) {

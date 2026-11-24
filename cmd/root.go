@@ -14,6 +14,7 @@ import (
 	"debris/internal/format/billfish"
 	"debris/internal/format/eagle"
 	"debris/internal/format/pixcall"
+	"debris/internal/format/refto"
 	"debris/pkg/debris"
 
 	"github.com/spf13/cobra"
@@ -39,6 +40,7 @@ var defaultEngine = func() *debris.Engine {
 		billfish.New(),
 		eagle.New(),
 		pixcall.New(),
+		refto.New(),
 	)
 	return debris.NewEngine(debris.WithRunner(engine.NewRunner(reg)))
 }
@@ -57,10 +59,11 @@ func NewRootCmd(eng *debris.Engine) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "debris",
 		Short:   "Convert and inspect design asset libraries across formats",
-		Long:    "Debris inspects, plans, and converts design asset libraries between formats such as Billfish, Eagle, and Pixcall.",
+		Long:    "Debris inspects, plans, and converts design asset libraries between formats such as Billfish, Eagle, Pixcall, and Refto.",
 		Version: versionString(),
 		Example: `  debris convert ./lib.billfish ./lib.library -t eagle
   debris convert ./lib.billfish -t pixcall --json
+  debris convert "./My Library.reflib" -t eagle
   debris inspect ./lib.library --json
   debris plan ./lib.billfish -t eagle`,
 	}

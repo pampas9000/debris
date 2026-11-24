@@ -23,6 +23,7 @@ type Tag struct {
 	Category  string    `json:"category,omitempty"`
 	Color     string    `json:"color,omitempty"`
 	Icon      string    `json:"icon,omitempty"`
+	Starred   bool      `json:"starred,omitempty"`
 	Seq       int64     `json:"seq,omitempty"`
 	CreatedAt time.Time `json:"createdAt,omitzero"`
 }

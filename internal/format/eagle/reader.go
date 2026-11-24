@@ -111,6 +111,7 @@ func (r *reader) scan(ctx context.Context, buildDomain bool) (*scanResult, error
 	}
 
 	tagSeen := make(map[string]struct{})
+	starredSet := readStarredTags(r.rootPath)
 	addTag := func(name string) string {
 		name = strings.TrimSpace(name)
 		if name == "" {
@@ -122,6 +123,7 @@ func (r *reader) scan(ctx context.Context, buildDomain bool) (*scanResult, error
 				ID:      name,
 				GroupID: tagToGroupID[name],
 				Name:    name,
+				Starred: starredSet[name],
 			})
 		}
 		return name
@@ -422,6 +424,27 @@ func resolveAssetFile(infoDir string, meta model.ImageMetadata) (fullPath, fileN
 		return filepath.Join(infoDir, fallback), fallback
 	}
 	return "", ""
+}
+
+func readStarredTags(rootPath string) map[string]bool {
+	raw, err := os.ReadFile(filepath.Join(rootPath, "tags.json"))
+	if err != nil {
+		return nil
+	}
+	var tf model.TagsFile
+	if err := json.Unmarshal(raw, &tf); err != nil {
+		return nil
+	}
+	if len(tf.StarredTags) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(tf.StarredTags))
+	for _, name := range tf.StarredTags {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			out[trimmed] = true
+		}
+	}
+	return out
 }
 
 func resolveThumbnailFile(infoDir string, meta model.ImageMetadata) string {

@@ -51,10 +51,11 @@ type ProbeResponse struct {
 
 // InspectRequest asks Debris to summarize a source library without converting it.
 type InspectRequest struct {
-	Path           string `json:"path"`
-	Format         string `json:"format,omitempty"`
-	IncludeDeleted bool   `json:"includeDeleted,omitempty"`
-	IncludeHidden  bool   `json:"includeHidden,omitempty"`
+	Path                 string `json:"path"`
+	Format               string `json:"format,omitempty"`
+	IncludeDeleted       bool   `json:"includeDeleted,omitempty"`
+	IncludeHidden        bool   `json:"includeHidden,omitempty"`
+	IncludeSuggestedTags bool   `json:"includeSuggestedTags,omitempty"`
 }
 
 // InspectResponse summarizes the contents of a source library.
@@ -76,15 +77,16 @@ type InspectResponse struct {
 
 // PlanRequest previews a conversion and potential capability/metadata losses.
 type PlanRequest struct {
-	From           string   `json:"from,omitempty"`
-	To             string   `json:"to"`
-	InputPath      string   `json:"inputPath"`
-	OutputPath     string   `json:"outputPath"`
-	CopyMode       CopyMode `json:"copyMode,omitempty"`
-	IncludeDeleted bool     `json:"includeDeleted,omitempty"`
-	IncludeHidden  bool     `json:"includeHidden,omitempty"`
-	Overwrite      bool     `json:"overwrite,omitempty"`
-	LibraryName    string   `json:"libraryName,omitempty"`
+	From                 string   `json:"from,omitempty"`
+	To                   string   `json:"to"`
+	InputPath            string   `json:"inputPath"`
+	OutputPath           string   `json:"outputPath"`
+	CopyMode             CopyMode `json:"copyMode,omitempty"`
+	IncludeDeleted       bool     `json:"includeDeleted,omitempty"`
+	IncludeHidden        bool     `json:"includeHidden,omitempty"`
+	IncludeSuggestedTags bool     `json:"includeSuggestedTags,omitempty"`
+	Overwrite            bool     `json:"overwrite,omitempty"`
+	LibraryName          string   `json:"libraryName,omitempty"`
 }
 
 // PlanResponse describes the projected conversion counts and compatibility notes.
@@ -105,15 +107,16 @@ type PlanResponse struct {
 
 // ConvertRequest executes a conversion between two formats.
 type ConvertRequest struct {
-	From           string   `json:"from,omitempty"`
-	To             string   `json:"to"`
-	InputPath      string   `json:"inputPath"`
-	OutputPath     string   `json:"outputPath"`
-	CopyMode       CopyMode `json:"copyMode,omitempty"`
-	IncludeDeleted bool     `json:"includeDeleted,omitempty"`
-	IncludeHidden  bool     `json:"includeHidden,omitempty"`
-	Overwrite      bool     `json:"overwrite,omitempty"`
-	LibraryName    string   `json:"libraryName,omitempty"`
+	From                 string   `json:"from,omitempty"`
+	To                   string   `json:"to"`
+	InputPath            string   `json:"inputPath"`
+	OutputPath           string   `json:"outputPath"`
+	CopyMode             CopyMode `json:"copyMode,omitempty"`
+	IncludeDeleted       bool     `json:"includeDeleted,omitempty"`
+	IncludeHidden        bool     `json:"includeHidden,omitempty"`
+	IncludeSuggestedTags bool     `json:"includeSuggestedTags,omitempty"`
+	Overwrite            bool     `json:"overwrite,omitempty"`
+	LibraryName          string   `json:"libraryName,omitempty"`
 }
 
 // ConvertResponse summarizes the completed conversion run.

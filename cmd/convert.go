@@ -42,15 +42,16 @@ func newConvertCmd(eng *debris.Engine) *cobra.Command {
 
 func executeConvert(cmd *cobra.Command, eng *debris.Engine, opts transferOptions) error {
 	req := debris.ConvertRequest{
-		From:           opts.From,
-		To:             opts.To,
-		InputPath:      opts.InputPath,
-		OutputPath:     opts.OutputPath,
-		CopyMode:       debris.CopyMode(opts.CopyMode),
-		IncludeDeleted: opts.IncludeDeleted,
-		IncludeHidden:  opts.IncludeHidden,
-		Overwrite:      opts.Overwrite,
-		LibraryName:    opts.LibraryName,
+		From:                 opts.From,
+		To:                   opts.To,
+		InputPath:            opts.InputPath,
+		OutputPath:           opts.OutputPath,
+		CopyMode:             debris.CopyMode(opts.CopyMode),
+		IncludeDeleted:       opts.IncludeDeleted,
+		IncludeHidden:        opts.IncludeHidden,
+		IncludeSuggestedTags: opts.IncludeSuggestedTags,
+		Overwrite:            opts.Overwrite,
+		LibraryName:          opts.LibraryName,
 	}
 
 	out := cmd.OutOrStdout()

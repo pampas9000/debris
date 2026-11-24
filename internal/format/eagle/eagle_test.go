@@ -6,6 +6,10 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -738,4 +742,94 @@ func copyDir(src, dst string) error {
 		}
 		return os.WriteFile(target, data, 0o644)
 	})
+}
+
+func TestStarredTagsAndJPEGThumbnailTranscode(t *testing.T) {
+	ctx := context.Background()
+	srcDir := t.TempDir()
+
+	assetPath := filepath.Join(srcDir, "shot.jpg")
+	if err := os.WriteFile(assetPath, []byte("fake-jpg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a valid JPEG thumbnail to test JPG -> PNG transcoding.
+	jpgThumb := filepath.Join(srcDir, "thumb.jpg")
+	img := image.NewRGBA(image.Rect(0, 0, 12, 8))
+	img.Set(0, 0, color.RGBA{R: 200, G: 50, B: 30, A: 255})
+	f, err := os.Create(jpgThumb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 90}); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	lib := &domain.Library{
+		Format: "refto",
+		Tags: []*domain.Tag{
+			{ID: "t1", Name: "Favorite", Starred: true},
+			{ID: "t2", Name: "Plain", Starred: false},
+		},
+		Assets: []*domain.Asset{
+			{
+				ID:         "a1",
+				FileName:   "shot.jpg",
+				Name:       "shot",
+				Ext:        "jpg",
+				SourcePath: assetPath,
+				Kind:       domain.KindImage,
+				TagIDs:     []string{"t1", "t2"},
+				MediaMeta:  &domain.MediaMeta{ThumbnailPath: jpgThumb},
+			},
+		},
+	}
+
+	adapter := eagle.New()
+	outDir := filepath.Join(t.TempDir(), "starred.library")
+	w, err := adapter.OpenWriter(ctx, outDir, format.WriteOptions{CopyMode: format.CopyModeCopy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(ctx, lib, nil); err != nil {
+		_ = w.Close()
+		t.Fatal(err)
+	}
+	_ = w.Close()
+
+	r, err := adapter.OpenReader(ctx, outDir, format.ReadOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	gotLib, err := r.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	starredByName := map[string]bool{}
+	for _, tg := range gotLib.Tags {
+		starredByName[tg.Name] = tg.Starred
+	}
+	if !starredByName["Favorite"] || starredByName["Plain"] {
+		t.Fatalf("unexpected starred tags after round-trip: %+v", starredByName)
+	}
+
+	if len(gotLib.Assets) != 1 || gotLib.Assets[0].MediaMeta == nil || gotLib.Assets[0].MediaMeta.ThumbnailPath == "" {
+		t.Fatalf("missing transcoded thumbnail in Eagle output: %+v", gotLib.Assets)
+	}
+	tf, err := os.Open(gotLib.Assets[0].MediaMeta.ThumbnailPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tf.Close()
+	cfg, err := png.DecodeConfig(tf)
+	if err != nil {
+		t.Fatalf("written thumbnail is not valid PNG: %v", err)
+	}
+	if cfg.Width != 12 || cfg.Height != 8 {
+		t.Fatalf("thumbnail dimensions = %dx%d, want 12x8", cfg.Width, cfg.Height)
+	}
 }

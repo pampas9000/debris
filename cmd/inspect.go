@@ -9,11 +9,12 @@ import (
 )
 
 type inspectOptions struct {
-	Path           string
-	Format         string
-	IncludeDeleted bool
-	IncludeHidden  bool
-	JSON           bool
+	Path                 string
+	Format               string
+	IncludeDeleted       bool
+	IncludeHidden        bool
+	IncludeSuggestedTags bool
+	JSON                 bool
 }
 
 func newInspectCmd(eng *debris.Engine) *cobra.Command {
@@ -39,6 +40,7 @@ func newInspectCmd(eng *debris.Engine) *cobra.Command {
 	flags.StringVarP(&opts.Format, "format", "f", "", "Source format (auto-detected if omitted)")
 	flags.BoolVar(&opts.IncludeDeleted, "include-deleted", false, "Include deleted/trashed items")
 	flags.BoolVar(&opts.IncludeHidden, "include-hidden", false, "Include hidden items")
+	flags.BoolVar(&opts.IncludeSuggestedTags, "include-suggested-tags", false, "Include AI-suggested (unconfirmed) tags when supported by source format")
 	flags.BoolVar(&opts.JSON, "json", false, "Output inspection result as JSON")
 	registerFormatFlagCompletion(cmd, "format", eng)
 
@@ -52,10 +54,11 @@ func executeInspect(cmd *cobra.Command, eng *debris.Engine, opts inspectOptions)
 	}
 
 	resp, err := eng.Inspect(commandContext(cmd), debris.InspectRequest{
-		Path:           opts.Path,
-		Format:         opts.Format,
-		IncludeDeleted: opts.IncludeDeleted,
-		IncludeHidden:  opts.IncludeHidden,
+		Path:                 opts.Path,
+		Format:               opts.Format,
+		IncludeDeleted:       opts.IncludeDeleted,
+		IncludeHidden:        opts.IncludeHidden,
+		IncludeSuggestedTags: opts.IncludeSuggestedTags,
 	})
 	if err != nil {
 		if opts.JSON {

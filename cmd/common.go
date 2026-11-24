@@ -15,29 +15,31 @@ import (
 )
 
 type transferOptions struct {
-	From           string
-	To             string
-	InputPath      string
-	OutputPath     string
-	CopyMode       string
-	Overwrite      bool
-	IncludeDeleted bool
-	IncludeHidden  bool
-	LibraryName    string
-	Quiet          bool
-	JSON           bool
+	From                 string
+	To                   string
+	InputPath            string
+	OutputPath           string
+	CopyMode             string
+	Overwrite            bool
+	IncludeDeleted       bool
+	IncludeHidden        bool
+	IncludeSuggestedTags bool
+	LibraryName          string
+	Quiet                bool
+	JSON                 bool
 }
 
 func bindTransferFlags(cmd *cobra.Command, opts *transferOptions, eng *debris.Engine, includeConvertOnly bool) {
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.From, "from", "f", "", "Source format (auto-detected if omitted)")
-	flags.StringVarP(&opts.To, "to", "t", "", "Destination format (e.g., eagle, pixcall, billfish)")
+	flags.StringVarP(&opts.To, "to", "t", "", "Destination format (e.g., eagle, pixcall, refto, billfish)")
 	flags.StringVarP(&opts.InputPath, "input", "i", "", "Input library path")
 	flags.StringVarP(&opts.OutputPath, "output", "o", "", "Output library path (derived from input and --to if omitted)")
 	flags.StringVar(&opts.CopyMode, "copy-mode", string(debris.CopyModeAuto), "Asset transfer mode: copy, hardlink, or auto")
 	flags.BoolVar(&opts.Overwrite, "overwrite", false, "Overwrite existing target directory contents")
 	flags.BoolVar(&opts.IncludeDeleted, "include-deleted", false, "Include deleted/trashed items")
 	flags.BoolVar(&opts.IncludeHidden, "include-hidden", false, "Include hidden items")
+	flags.BoolVar(&opts.IncludeSuggestedTags, "include-suggested-tags", false, "Include AI-suggested (unconfirmed) tags when supported by source format")
 	flags.StringVar(&opts.LibraryName, "name", "", "Override target library name")
 
 	if includeConvertOnly {
@@ -98,6 +100,8 @@ var knownLibraryExtensions = []string{
 	".library",
 	".eagle",
 	".pixcall",
+	".reflib",
+	".refto",
 }
 
 // defaultOutputPath derives a target library path from inputPath and toFormat
@@ -126,6 +130,8 @@ func defaultOutputPath(inputPath, toFormat string) string {
 		targetExt = ".library"
 	case "pixcall":
 		targetExt = ".pixcall"
+	case "refto":
+		targetExt = ".reflib"
 	case "billfish":
 		targetExt = ".billfish"
 	default:

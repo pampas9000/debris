@@ -18,6 +18,9 @@ import (
 	"debris/internal/format/billfish"
 	"debris/internal/format/eagle"
 	"debris/internal/format/pixcall"
+	pixcallmodel "debris/internal/format/pixcall/model"
+	"debris/internal/format/refto"
+	"debris/internal/kit"
 	"debris/pkg/debris"
 )
 
@@ -26,6 +29,7 @@ func newIntegrationEngine() (*debris.Engine, map[string]format.Adapter) {
 		billfish.New(),
 		eagle.New(),
 		pixcall.New(),
+		refto.New(),
 	}
 	byID := make(map[string]format.Adapter, len(adapters))
 	for _, a := range adapters {
@@ -97,8 +101,8 @@ func TestIntegration_ProbeAndInspectAllSamples(t *testing.T) {
 	ctx := context.Background()
 
 	specs := eng.Formats()
-	if len(specs) != 3 {
-		t.Fatalf("expected 3 registered formats, got %d", len(specs))
+	if len(specs) != 4 {
+		t.Fatalf("expected 4 registered formats, got %d", len(specs))
 	}
 
 	cases := []struct {
@@ -641,4 +645,148 @@ func containsValue(m map[string]string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestIntegration_ReftoCrossFormatConversions(t *testing.T) {
+	eng, adapters := newIntegrationEngine()
+	ctx := context.Background()
+
+	type roundTripCase struct {
+		name        string
+		sampleDir   string
+		srcFormat   string
+		wantAssets  int
+		wantFolders int
+		minTags     int
+	}
+
+	cases := []roundTripCase{
+		{
+			name:        "eagle->refto->eagle",
+			sampleDir:   "eagle.library",
+			srcFormat:   "eagle",
+			wantAssets:  5,
+			wantFolders: 2,
+			minTags:     9,
+		},
+		{
+			name:        "pixcall->refto->pixcall",
+			sampleDir:   "pixcall.library",
+			srcFormat:   "pixcall",
+			wantAssets:  6,
+			wantFolders: 0,
+			minTags:     3,
+		},
+		{
+			name:        "billfish->refto",
+			sampleDir:   "billfish.library",
+			srcFormat:   "billfish",
+			wantAssets:  4,
+			wantFolders: 2,
+			minTags:     4,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srcCopy := copySampleLibrary(t, tc.sampleDir)
+			for _, mode := range []debris.CopyMode{debris.CopyModeCopy, debris.CopyModeHardlink} {
+				t.Run(string(mode), func(t *testing.T) {
+					reftoDir := filepath.Join(t.TempDir(), "mid.reflib")
+					resp1, err := eng.Convert(ctx, debris.ConvertRequest{
+						To:          "refto",
+						InputPath:   srcCopy,
+						OutputPath:  reftoDir,
+						CopyMode:    mode,
+						LibraryName: "MidRefto",
+					}, nil)
+					if err != nil {
+						t.Fatalf("Convert(%s -> refto, %s) failed: %v", tc.srcFormat, mode, err)
+					}
+					if resp1.SourceFormat != tc.srcFormat || resp1.TargetFormat != "refto" ||
+						resp1.AssetCount != tc.wantAssets || resp1.FolderCount != tc.wantFolders ||
+						resp1.SkippedAssets != 0 {
+						t.Fatalf("unexpected Convert->refto response: %+v", resp1)
+					}
+
+					probeResp, err := eng.Probe(ctx, debris.ProbeRequest{Path: reftoDir})
+					if err != nil || !probeResp.Matched || probeResp.Format != "refto" {
+						t.Fatalf("Probe(refto) = (%+v, %v)", probeResp, err)
+					}
+
+					inspectResp, err := eng.Inspect(ctx, debris.InspectRequest{Path: reftoDir})
+					if err != nil {
+						t.Fatalf("Inspect(refto) failed: %v", err)
+					}
+					if inspectResp.AssetCount != tc.wantAssets || inspectResp.FolderCount != tc.wantFolders || inspectResp.TagCount < tc.minTags {
+						t.Fatalf("unexpected Inspect(refto): %+v", inspectResp)
+					}
+
+					// If billfish->refto, verify read-back directly; otherwise also convert back to srcFormat.
+					reftoReader, err := adapters["refto"].OpenReader(ctx, reftoDir, format.ReadOptions{})
+					if err != nil {
+						t.Fatal(err)
+					}
+					reftoLib, err := reftoReader.Read(ctx)
+					_ = reftoReader.Close()
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(reftoLib.Assets) != tc.wantAssets {
+						t.Fatalf("read refto assets = %d, want %d", len(reftoLib.Assets), tc.wantAssets)
+					}
+
+					if tc.srcFormat == "billfish" {
+						return
+					}
+
+					backDir := filepath.Join(t.TempDir(), "back."+tc.srcFormat)
+					resp2, err := eng.Convert(ctx, debris.ConvertRequest{
+						To:         tc.srcFormat,
+						InputPath:  reftoDir,
+						OutputPath: backDir,
+						CopyMode:   mode,
+					}, nil)
+					if err != nil {
+						t.Fatalf("Convert(refto -> %s, %s) failed: %v", tc.srcFormat, mode, err)
+					}
+					if resp2.SourceFormat != "refto" || resp2.TargetFormat != tc.srcFormat ||
+						resp2.AssetCount != tc.wantAssets || resp2.FolderCount != tc.wantFolders ||
+						resp2.SkippedAssets != 0 {
+						t.Fatalf("unexpected Convert(refto->%s) response: %+v", tc.srcFormat, resp2)
+					}
+
+					if tc.srcFormat == "pixcall" {
+						db, closer, err := kit.OpenReadOnly(filepath.Join(backDir, ".pixcall", "database", "main.db"))
+						if err != nil {
+							t.Fatalf("open round-trip pixcall main.db: %v", err)
+						}
+						type mediaEntry struct {
+							Name        string
+							ContentType string
+						}
+						var mediaRows []mediaEntry
+						err = db.Table("media").
+							Select("entries.name AS name, entries.content_type AS content_type").
+							Joins("JOIN entries ON entries.id = media.entry_id").
+							Find(&mediaRows).Error
+						var nonNullIcons int64
+						err2 := db.Model(&pixcallmodel.Folders{}).Where("icon IS NOT NULL").Count(&nonNullIcons).Error
+						_ = closer.Close()
+						if err != nil || err2 != nil {
+							t.Fatalf("query round-trip pixcall main.db: err=%v err2=%v", err, err2)
+						}
+						if nonNullIcons != 0 {
+							t.Fatalf("refto->pixcall folders.icon non-null count = %d, want 0", nonNullIcons)
+						}
+						for _, row := range mediaRows {
+							if !strings.HasPrefix(row.ContentType, "video/") && !strings.HasPrefix(row.ContentType, "audio/") {
+								t.Fatalf("refto->pixcall unexpectedly wrote media row for non-AV file %+v", row)
+							}
+						}
+					}
+				})
+			}
+		})
+	}
 }

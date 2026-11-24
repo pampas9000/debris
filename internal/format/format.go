@@ -86,9 +86,10 @@ type InspectResult struct {
 
 // ReadOptions configures how a Reader inspects or loads a library.
 type ReadOptions struct {
-	IncludeDeleted bool `json:"includeDeleted,omitempty"`
-	IncludeHidden  bool `json:"includeHidden,omitempty"`
-	SkipMediaProbe bool `json:"skipMediaProbe,omitempty"`
+	IncludeDeleted       bool `json:"includeDeleted,omitempty"`
+	IncludeHidden        bool `json:"includeHidden,omitempty"`
+	IncludeSuggestedTags bool `json:"includeSuggestedTags,omitempty"`
+	SkipMediaProbe       bool `json:"skipMediaProbe,omitempty"`
 }
 
 // WriteOptions configures how a Writer materializes a library on disk.

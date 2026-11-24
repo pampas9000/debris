@@ -326,14 +326,14 @@ func TestPlanJSONError(t *testing.T) {
 func TestDefaultEngineFormats(t *testing.T) {
 	eng := defaultEngine()
 	specs := eng.Formats()
-	if len(specs) != 3 {
-		t.Fatalf("expected 3 wired formats, got %d: %+v", len(specs), specs)
+	if len(specs) != 4 {
+		t.Fatalf("expected 4 wired formats, got %d: %+v", len(specs), specs)
 	}
 	got := make(map[string]bool, len(specs))
 	for _, s := range specs {
 		got[s.ID] = true
 	}
-	for _, want := range []string{"billfish", "eagle", "pixcall"} {
+	for _, want := range []string{"billfish", "eagle", "pixcall", "refto"} {
 		if !got[want] {
 			t.Fatalf("defaultEngine missing format %q (got %+v)", want, specs)
 		}
@@ -367,6 +367,35 @@ func TestPositionalArgsAndDerivedOutput(t *testing.T) {
 	// same-format derivation avoids colliding with input path
 	if got := defaultOutputPath("./my.library", "eagle"); got != "my-eagle.library" {
 		t.Fatalf("expected collision-safe derived path, got %q", got)
+	}
+	// refto derivation
+	if got := defaultOutputPath("./My Library.reflib", "eagle"); got != "My Library.library" {
+		t.Fatalf("expected .library derived from .reflib, got %q", got)
+	}
+	if got := defaultOutputPath("./my.library", "refto"); got != "my.reflib" {
+		t.Fatalf("expected .reflib derived for refto, got %q", got)
+	}
+}
+
+func TestIncludeSuggestedTagsFlagForwarding(t *testing.T) {
+	runner := &mockRunner{}
+	if _, _, err := runCLI(runner, "inspect", "/libs/a.reflib", "--include-suggested-tags", "--json"); err != nil {
+		t.Fatalf("inspect failed: %v", err)
+	}
+	if !runner.lastInspect.IncludeSuggestedTags {
+		t.Fatal("expected IncludeSuggestedTags=true on inspect request")
+	}
+	if _, _, err := runCLI(runner, "plan", "/libs/a.reflib", "-t", "eagle", "--include-suggested-tags", "--json"); err != nil {
+		t.Fatalf("plan failed: %v", err)
+	}
+	if !runner.lastPlan.IncludeSuggestedTags {
+		t.Fatal("expected IncludeSuggestedTags=true on plan request")
+	}
+	if _, _, err := runCLI(runner, "convert", "/libs/a.reflib", "-t", "eagle", "--include-suggested-tags", "--json"); err != nil {
+		t.Fatalf("convert failed: %v", err)
+	}
+	if !runner.lastConvert.IncludeSuggestedTags {
+		t.Fatal("expected IncludeSuggestedTags=true on convert request")
 	}
 }
 

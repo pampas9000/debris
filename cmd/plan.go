@@ -36,15 +36,16 @@ func executePlan(cmd *cobra.Command, eng *debris.Engine, opts transferOptions) e
 	}
 
 	resp, err := eng.Plan(commandContext(cmd), debris.PlanRequest{
-		From:           opts.From,
-		To:             opts.To,
-		InputPath:      opts.InputPath,
-		OutputPath:     opts.OutputPath,
-		CopyMode:       debris.CopyMode(opts.CopyMode),
-		IncludeDeleted: opts.IncludeDeleted,
-		IncludeHidden:  opts.IncludeHidden,
-		Overwrite:      opts.Overwrite,
-		LibraryName:    opts.LibraryName,
+		From:                 opts.From,
+		To:                   opts.To,
+		InputPath:            opts.InputPath,
+		OutputPath:           opts.OutputPath,
+		CopyMode:             debris.CopyMode(opts.CopyMode),
+		IncludeDeleted:       opts.IncludeDeleted,
+		IncludeHidden:        opts.IncludeHidden,
+		IncludeSuggestedTags: opts.IncludeSuggestedTags,
+		Overwrite:            opts.Overwrite,
+		LibraryName:          opts.LibraryName,
 	})
 	if err != nil {
 		if opts.JSON {

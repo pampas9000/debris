@@ -90,9 +90,10 @@ func (r *Runner) Inspect(ctx context.Context, req debris.InspectRequest) (resp d
 	}
 
 	opts := format.ReadOptions{
-		IncludeDeleted: req.IncludeDeleted,
-		IncludeHidden:  req.IncludeHidden,
-		SkipMediaProbe: true,
+		IncludeDeleted:       req.IncludeDeleted,
+		IncludeHidden:        req.IncludeHidden,
+		IncludeSuggestedTags: req.IncludeSuggestedTags,
+		SkipMediaProbe:       true,
 	}
 	reader, err := adapter.OpenReader(ctx, req.Path, opts)
 	if err != nil {
@@ -157,9 +158,10 @@ func (r *Runner) Plan(ctx context.Context, req debris.PlanRequest) (resp debris.
 	}
 
 	opts := format.ReadOptions{
-		IncludeDeleted: req.IncludeDeleted,
-		IncludeHidden:  req.IncludeHidden,
-		SkipMediaProbe: true,
+		IncludeDeleted:       req.IncludeDeleted,
+		IncludeHidden:        req.IncludeHidden,
+		IncludeSuggestedTags: req.IncludeSuggestedTags,
+		SkipMediaProbe:       true,
 	}
 	reader, err := srcAdapter.OpenReader(ctx, req.InputPath, opts)
 	if err != nil {
@@ -310,8 +312,9 @@ func (r *Runner) resolveSourceAdapter(ctx context.Context, explicitFormat, path 
 
 func (r *Runner) readSourceLibrary(ctx context.Context, srcAdapter format.Adapter, req debris.ConvertRequest) (lib *domain.Library, retErr error) {
 	readOpts := format.ReadOptions{
-		IncludeDeleted: req.IncludeDeleted,
-		IncludeHidden:  req.IncludeHidden,
+		IncludeDeleted:       req.IncludeDeleted,
+		IncludeHidden:        req.IncludeHidden,
+		IncludeSuggestedTags: req.IncludeSuggestedTags,
 	}
 	reader, err := srcAdapter.OpenReader(ctx, req.InputPath, readOpts)
 	if err != nil {
