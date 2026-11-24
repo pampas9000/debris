@@ -26,6 +26,7 @@ export interface ConvertRequest {
   copyMode?: CopyMode;
   includeDeleted?: boolean;
   includeHidden?: boolean;
+  includeSuggestedTags?: boolean;
   overwrite?: boolean;
   libraryName?: string;
 }
@@ -72,6 +73,7 @@ export interface InspectRequest {
   format?: string;
   includeDeleted?: boolean;
   includeHidden?: boolean;
+  includeSuggestedTags?: boolean;
 }
 
 export interface InspectResponse {
@@ -98,6 +100,7 @@ export interface PlanRequest {
   copyMode?: CopyMode;
   includeDeleted?: boolean;
   includeHidden?: boolean;
+  includeSuggestedTags?: boolean;
   overwrite?: boolean;
   libraryName?: string;
 }

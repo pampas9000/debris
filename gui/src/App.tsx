@@ -29,13 +29,19 @@ import { Input } from "./components/ui/input";
 import { Progress } from "./components/ui/progress";
 import { SegmentedControl } from "./components/ui/segmented";
 import { Select } from "./components/ui/select";
-import { LOCALE_OPTIONS, setLocale, t, useLocale } from "./i18n";
+import { LOCALE_OPTIONS, type MessageKey, setLocale, t, useLocale } from "./i18n";
 import { cycleTheme, useTheme } from "./theme";
 
 type FormatSpec = Awaited<ReturnType<typeof DebrisService.formats>>[number];
 type InspectResponse = Awaited<ReturnType<typeof DebrisService.inspect>>;
 type PlanResponse = Awaited<ReturnType<typeof DebrisService.plan>>;
 type ConvertResponse = Awaited<ReturnType<typeof DebrisService.convert>>;
+
+interface ParsedNotice {
+  kind: "info" | "warning";
+  text: string;
+  action?: "includeSuggestedTags";
+}
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
@@ -59,8 +65,10 @@ function joinPath(parent: string, child: string): string {
 
 function defaultLibraryNameFromPath(path: string, targetFmt: string): string {
   const base = path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
-  const stem = base.replace(/\.(library|pixcall|billfish|bf)$/i, "") || "converted";
-  return targetFmt === "eagle" ? `${stem}.library` : stem;
+  const stem = base.replace(/\.(library|pixcall|billfish|bf|reflib|refto)$/i, "") || "converted";
+  if (targetFmt === "eagle") return `${stem}.library`;
+  if (targetFmt === "refto") return `${stem}.reflib`;
+  return stem;
 }
 
 function formatStage(stage: string): string {
@@ -90,20 +98,23 @@ function formatStage(stage: string): string {
   }
 }
 
-function formatPlanNotice(msg: string): { kind: "info" | "warning"; text: string } {
-  const autoMatch = msg.match(/^auto copy mode: hardlinks avoid duplicating (\d+) bytes/i);
-  if (autoMatch) {
-    return { kind: "info", text: t("planInfoAuto", { size: formatBytes(Number(autoMatch[1])) }) };
-  }
-  const hardlinkMatch = msg.match(/estimated additional media disk usage is ~0 bytes \(vs (\d+) bytes/i);
-  if (hardlinkMatch) {
-    return { kind: "info", text: t("planInfoHardlink", { size: formatBytes(Number(hardlinkMatch[1])) }) };
-  }
-  const sameFmtMatch = msg.match(/^source and target formats are both (.+)$/i);
-  if (sameFmtMatch) {
-    return { kind: "warning", text: t("planWarnSameFormat", { format: sameFmtMatch[1] }) };
-  }
-  return { kind: "warning", text: msg };
+const LOSS_KEY_MAP: Record<string, MessageKey> = {
+  "folders are not supported by target format": "lossFolders",
+  "nested folder hierarchy is not supported by target format and may be flattened": "lossNestedFolders",
+  "multi-folder asset associations are not supported by target format": "lossMultiFolder",
+  "tag groups are not supported by target format": "lossTagGroups",
+  "nested tag hierarchy is not supported by target format and may be flattened": "lossNestedTags",
+  "asset color palettes are not supported by target format": "lossColors",
+  "recycle bin / deleted item state is not supported by target format": "lossRecycleBin",
+  "custom thumbnails are not supported by target format": "lossThumbnails",
+  "asset ratings are not supported by target format": "lossRating",
+  "asset origin URLs are not supported by target format": "lossOriginURL",
+  "asset annotations are not supported by target format": "lossAnnotation",
+};
+
+function formatLoss(msg: string): string {
+  const key = LOSS_KEY_MAP[msg];
+  return key ? t(key) : msg;
 }
 
 function ThemeIcon(props: { mode: "system" | "light" | "dark" }) {
@@ -126,6 +137,7 @@ export default function App() {
   const [overwrite, setOverwrite] = createSignal(false);
   const [includeDeleted, setIncludeDeleted] = createSignal(false);
   const [includeHidden, setIncludeHidden] = createSignal(false);
+  const [includeSuggestedTags, setIncludeSuggestedTags] = createSignal(false);
 
   const [inspectInfo, setInspectInfo] = createSignal<InspectResponse | null>(null);
   const [planInfo, setPlanInfo] = createSignal<PlanResponse | null>(null);
@@ -142,6 +154,95 @@ export default function App() {
   });
 
   const writableFormats = createMemo(() => formats().filter((f) => f.id !== "billfish"));
+
+  function formatDisplayName(id: string): string {
+    const found = formats().find((f) => f.id.toLowerCase() === id.toLowerCase());
+    if (found) return found.displayName;
+    if (!id) return "";
+    return id.charAt(0).toUpperCase() + id.slice(1);
+  }
+
+  function formatNotice(msg: string): ParsedNotice {
+    const suggestedMatch = msg.match(/^excluding (\d+) AI-suggested tag/i);
+    if (suggestedMatch) {
+      return {
+        kind: "info",
+        text: t("noticeSuggestedTags", { count: Number(suggestedMatch[1]) }),
+        action: "includeSuggestedTags",
+      };
+    }
+
+    const linkedMissingMatch = msg.match(/^(\d+) linked asset\(s\) are missing/i);
+    if (linkedMissingMatch) {
+      return { kind: "warning", text: t("noticeLinkedMissing", { count: Number(linkedMissingMatch[1]) }) };
+    }
+
+    const versionsMatch = msg.match(/^library contains (\d+) item version\(s\)/i);
+    if (versionsMatch) {
+      return { kind: "info", text: t("noticeVersions", { count: Number(versionsMatch[1]) }) };
+    }
+
+    const stacksMatch = msg.match(/^library contains (\d+) asset stack\(s\)/i);
+    if (stacksMatch) {
+      return { kind: "info", text: t("noticeStacks", { count: Number(stacksMatch[1]) }) };
+    }
+
+    const liveMatch = msg.match(/^library contains (\d+) Live Photo item\(s\)/i);
+    if (liveMatch) {
+      return { kind: "info", text: t("noticeLivePhotos", { count: Number(liveMatch[1]) }) };
+    }
+
+    const smartMatch = msg.match(/^library contains (\d+) smart folder\(s\)/i);
+    if (smartMatch) {
+      return { kind: "info", text: t("noticeSmartFolders", { count: Number(smartMatch[1]) }) };
+    }
+
+    const boardsMatch = msg.match(/^library contains (\d+) whiteboard\(s\)/i);
+    if (boardsMatch) {
+      return { kind: "info", text: t("noticeBoards", { count: Number(boardsMatch[1]) }) };
+    }
+
+    const noFoldersMatch = msg.match(/^(\d+) folder\(s\) will not be preserved in (.+)$/i);
+    if (noFoldersMatch) {
+      return {
+        kind: "warning",
+        text: t("noticeNoFolders", { count: Number(noFoldersMatch[1]), format: noFoldersMatch[2] }),
+      };
+    }
+
+    const noTagGroupsMatch = msg.match(/^(\d+) tag group\(s\) will not be preserved in (.+)$/i);
+    if (noTagGroupsMatch) {
+      return {
+        kind: "warning",
+        text: t("noticeNoTagGroups", { count: Number(noTagGroupsMatch[1]), format: noTagGroupsMatch[2] }),
+      };
+    }
+
+    const noRecycleMatch = msg.match(/^(\d+) deleted item\(s\) cannot remain in a recycle bin in (.+)$/i);
+    if (noRecycleMatch) {
+      return {
+        kind: "warning",
+        text: t("noticeNoRecycleBin", { count: Number(noRecycleMatch[1]), format: noRecycleMatch[2] }),
+      };
+    }
+
+    const autoMatch = msg.match(/^auto copy mode: hardlinks avoid duplicating (\d+) bytes/i);
+    if (autoMatch) {
+      return { kind: "info", text: t("planInfoAuto", { size: formatBytes(Number(autoMatch[1])) }) };
+    }
+
+    const hardlinkMatch = msg.match(/estimated additional media disk usage is ~0 bytes \(vs (\d+) bytes/i);
+    if (hardlinkMatch) {
+      return { kind: "info", text: t("planInfoHardlink", { size: formatBytes(Number(hardlinkMatch[1])) }) };
+    }
+
+    const sameFmtMatch = msg.match(/^source and target formats are both (.+)$/i);
+    if (sameFmtMatch) {
+      return { kind: "warning", text: t("planWarnSameFormat", { format: formatDisplayName(sameFmtMatch[1]) }) };
+    }
+
+    return { kind: "warning", text: msg };
+  }
 
   function resetRunState() {
     setPlanInfo(null);
@@ -196,6 +297,7 @@ export default function App() {
         format: detectedFormat || undefined,
         includeDeleted: includeDeleted(),
         includeHidden: includeHidden(),
+        includeSuggestedTags: includeSuggestedTags(),
       });
       setInspectInfo(info);
     } catch (err) {
@@ -266,6 +368,7 @@ export default function App() {
         overwrite: overwrite(),
         includeDeleted: includeDeleted(),
         includeHidden: includeHidden(),
+        includeSuggestedTags: includeSuggestedTags(),
         libraryName: libraryName().trim() || undefined,
       });
       setPlanInfo(plan);
@@ -301,6 +404,7 @@ export default function App() {
         overwrite: overwrite(),
         includeDeleted: includeDeleted(),
         includeHidden: includeHidden(),
+        includeSuggestedTags: includeSuggestedTags(),
         libraryName: libraryName().trim() || undefined,
       });
       setResult(res);
@@ -311,6 +415,33 @@ export default function App() {
         s.running = false;
       });
     }
+  }
+
+  function enableSuggestedTagsFromNotice() {
+    setIncludeSuggestedTags(true);
+    resetRunState();
+    if (inputPath()) {
+      void refreshInspect(inputPath(), sourceFormat());
+    }
+  }
+
+  function buildSubStats(info: InspectResponse): string {
+    const parts: string[] = [];
+    if (info.tagGroupCount > 0) {
+      parts.push(t("subStatsTagGroups", { count: info.tagGroupCount }));
+    }
+    if ((info.deletedCount ?? 0) > 0) {
+      parts.push(t("subStatsDeleted", { count: info.deletedCount! }));
+    }
+    if ((info.hiddenCount ?? 0) > 0) {
+      const key = sourceFormat() === "refto" ? "subStatsArchived" : "subStatsHidden";
+      parts.push(t(key, { count: info.hiddenCount! }));
+    }
+    const suggestedCount = Number(info.extra?.suggestedTagCount ?? 0);
+    if (suggestedCount > 0) {
+      parts.push(t("subStatsSuggestedTags", { count: suggestedCount }));
+    }
+    return parts.join(" · ");
   }
 
   const percent = createMemo(() =>
@@ -333,6 +464,35 @@ export default function App() {
     if (copyMode() === "copy") return t("modeHintCopy");
     return t("modeHintAuto");
   });
+
+  const hiddenOptionLabel = createMemo(() =>
+    sourceFormat() === "refto" ? t("optIncludeArchived") : t("optIncludeHidden")
+  );
+
+  function renderNoticeAlert(rawMsg: string) {
+    const notice = formatNotice(rawMsg);
+    return (
+      <Alert variant={notice.kind === "info" ? "default" : "warning"} class="items-center justify-between">
+        <div class="flex items-start gap-2.5">
+          <Show when={notice.kind === "info"} fallback={<Icon icon={TriangleAlert} class="mt-0.5 shrink-0" />}>
+            <Icon icon={Info} class="mt-0.5 shrink-0 text-muted-foreground" />
+          </Show>
+          <span>{notice.text}</span>
+        </div>
+        <Show when={notice.action === "includeSuggestedTags" && !includeSuggestedTags()}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={progress.running}
+            onClick={enableSuggestedTagsFromNotice}
+            class="h-6 shrink-0 px-2 text-[11px]"
+          >
+            {t("actionIncludeSuggestedTags")}
+          </Button>
+        </Show>
+      </Alert>
+    );
+  }
 
   return (
     <div class="grid h-full grid-rows-[52px_1fr_auto] overflow-hidden bg-background text-foreground">
@@ -382,12 +542,7 @@ export default function App() {
                   <Icon icon={Folder} class="text-muted-foreground" />
                   <CardTitle>{t("sourceTitle")}</CardTitle>
                   <Show when={inspectInfo()}>
-                    {(info) => (
-                      <Badge>
-                        {info().format}
-                        {info().version ? ` · v${info().version}` : ""}
-                      </Badge>
-                    )}
+                    {(info) => <Badge>{formatDisplayName(info().format)}</Badge>}
                   </Show>
                 </div>
                 <Button variant="outline" size="sm" onClick={pickSource} disabled={progress.running}>
@@ -413,60 +568,73 @@ export default function App() {
                   }
                 >
                   <div class="space-y-3">
-                    <div
-                      class="rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11.5px] text-foreground break-all select-text"
-                      title={inputPath()}
-                    >
-                      {inputPath()}
+                    <div class="rounded-md border border-border bg-background px-3 py-2">
+                      <Show
+                        when={inspectInfo()?.name}
+                        fallback={
+                          <div class="truncate text-xs text-foreground select-text" title={inputPath()}>
+                            {inputPath()}
+                          </div>
+                        }
+                      >
+                        {(libName) => (
+                          <div>
+                            <div class="truncate text-xs font-medium text-foreground" title={libName()}>
+                              {libName()}
+                            </div>
+                            <div
+                              class="mt-0.5 truncate text-[11px] text-muted-foreground select-text"
+                              title={inputPath()}
+                            >
+                              {inputPath()}
+                            </div>
+                          </div>
+                        )}
+                      </Show>
                     </div>
 
                     <Show when={inspectInfo()}>
-                      {(info) => (
-                        <div>
-                          <div class="grid grid-cols-4 gap-2">
-                            <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
-                              <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Icon icon={Image} size={11} />
-                                {t("metricAssets")}
+                      {(info) => {
+                        const subStats = () => buildSubStats(info());
+                        return (
+                          <div>
+                            <div class="grid grid-cols-4 gap-2">
+                              <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
+                                <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Icon icon={Image} size={11} />
+                                  {t("metricAssets")}
+                                </div>
+                                <div class="text-sm font-semibold tabular-nums">{info().assetCount.toLocaleString()}</div>
                               </div>
-                              <div class="text-sm font-semibold tabular-nums">{info().assetCount.toLocaleString()}</div>
-                            </div>
-                            <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
-                              <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Icon icon={Folder} size={11} />
-                                {t("metricFolders")}
+                              <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
+                                <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Icon icon={Folder} size={11} />
+                                  {t("metricFolders")}
+                                </div>
+                                <div class="text-sm font-semibold tabular-nums">{info().folderCount.toLocaleString()}</div>
                               </div>
-                              <div class="text-sm font-semibold tabular-nums">{info().folderCount.toLocaleString()}</div>
-                            </div>
-                            <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
-                              <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Icon icon={Tag} size={11} />
-                                {t("metricTags")}
+                              <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
+                                <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Icon icon={Tag} size={11} />
+                                  {t("metricTags")}
+                                </div>
+                                <div class="text-sm font-semibold tabular-nums">{info().tagCount.toLocaleString()}</div>
                               </div>
-                              <div class="text-sm font-semibold tabular-nums">{info().tagCount.toLocaleString()}</div>
-                            </div>
-                            <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
-                              <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Icon icon={HardDrive} size={11} />
-                                {t("metricSize")}
+                              <div class="rounded-md bg-muted/60 px-2.5 py-1.5">
+                                <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Icon icon={HardDrive} size={11} />
+                                  {t("metricSize")}
+                                </div>
+                                <div class="text-sm font-semibold tabular-nums">{formatBytes(info().totalBytes)}</div>
                               </div>
-                              <div class="text-sm font-semibold tabular-nums">{formatBytes(info().totalBytes)}</div>
                             </div>
-                          </div>
 
-                          <Show when={info().tagGroupCount > 0 || (info().deletedCount ?? 0) > 0 || (info().hiddenCount ?? 0) > 0}>
-                            <div class="mt-2 text-[11.5px] text-muted-foreground tabular-nums">
-                              {t("subStats", { groups: info().tagGroupCount })}
-                              {(info().deletedCount ?? 0) > 0
-                                ? ` · ${t("subStatsDeleted", { count: info().deletedCount! })}`
-                                : ""}
-                              {(info().hiddenCount ?? 0) > 0
-                                ? ` · ${t("subStatsHidden", { count: info().hiddenCount! })}`
-                                : ""}
-                            </div>
-                          </Show>
-                        </div>
-                      )}
+                            <Show when={subStats()}>
+                              <div class="mt-2 text-[11.5px] text-muted-foreground tabular-nums">{subStats()}</div>
+                            </Show>
+                          </div>
+                        );
+                      }}
                     </Show>
                   </div>
                 </Show>
@@ -486,7 +654,7 @@ export default function App() {
                 <div class="flex items-center gap-2">
                   <Icon icon={Folder} class="text-muted-foreground" />
                   <CardTitle>{t("targetTitle")}</CardTitle>
-                  <Badge variant="secondary">{targetFormat()}</Badge>
+                  <Badge variant="secondary">{formatDisplayName(targetFormat())}</Badge>
                 </div>
                 <Button variant="outline" size="sm" onClick={pickOutput} disabled={progress.running}>
                   <Icon icon={FolderOpen} size={13} />
@@ -530,7 +698,7 @@ export default function App() {
                       }
                     >
                       <div
-                        class="rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11.5px] text-foreground break-all select-text"
+                        class="truncate rounded-md border border-border bg-background px-2.5 py-2 text-[11.5px] text-foreground select-text"
                         title={outputPath()}
                       >
                         {outputPath()}
@@ -553,7 +721,7 @@ export default function App() {
                     />
                     <Show when={resolvedOutputPath()}>
                       {(fullPath) => (
-                        <div class="font-mono text-[11px] text-muted-foreground break-all select-text">
+                        <div class="truncate text-[11px] text-muted-foreground select-text" title={fullPath()}>
                           {t("resolvedOutputHint", { path: fullPath() })}
                         </div>
                       )}
@@ -589,7 +757,7 @@ export default function App() {
                 <p class="text-[11.5px] text-muted-foreground">{modeHint()}</p>
               </div>
 
-              <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 md:justify-end md:border-t-0 md:border-l md:pt-0 md:pl-4">
+              <div class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 md:border-t-0 md:border-l md:pt-0 md:pl-4">
                 <Checkbox
                   label={t("optOverwrite")}
                   checked={overwrite()}
@@ -610,7 +778,7 @@ export default function App() {
                   }}
                 />
                 <Checkbox
-                  label={t("optIncludeHidden")}
+                  label={hiddenOptionLabel()}
                   checked={includeHidden()}
                   disabled={progress.running}
                   onChange={(checked) => {
@@ -619,6 +787,18 @@ export default function App() {
                     if (inputPath()) void refreshInspect(inputPath(), sourceFormat());
                   }}
                 />
+                <Show when={sourceFormat() === "refto"}>
+                  <Checkbox
+                    label={t("optIncludeSuggestedTags")}
+                    checked={includeSuggestedTags()}
+                    disabled={progress.running}
+                    onChange={(checked) => {
+                      setIncludeSuggestedTags(checked);
+                      resetRunState();
+                      if (inputPath()) void refreshInspect(inputPath(), sourceFormat());
+                    }}
+                  />
+                </Show>
               </div>
             </CardContent>
           </Card>
@@ -627,23 +807,16 @@ export default function App() {
           <Show when={errorMsg()}>
             {(msg) => (
               <Alert variant="destructive">
-                <Icon icon={TriangleAlert} class="mt-0.5" />
+                <Icon icon={TriangleAlert} class="mt-0.5 shrink-0" />
                 <div>{msg()}</div>
               </Alert>
             )}
           </Show>
 
-          {/* Inspect Warnings */}
-          <Show when={inspectInfo()?.warnings && inspectInfo()!.warnings!.length > 0}>
+          {/* Inspect Notices (hidden once Pre-flight Preview is shown to avoid duplicates) */}
+          <Show when={!planInfo() && inspectInfo()?.warnings && inspectInfo()!.warnings!.length > 0}>
             <div class="flex flex-col gap-1.5">
-              <For each={inspectInfo()!.warnings}>
-                {(w) => (
-                  <Alert variant="warning">
-                    <Icon icon={TriangleAlert} class="mt-0.5" />
-                    <span>{w}</span>
-                  </Alert>
-                )}
-              </For>
+              <For each={inspectInfo()!.warnings}>{(w) => renderNoticeAlert(w)}</For>
             </div>
           </Show>
 
@@ -653,9 +826,8 @@ export default function App() {
               <Card>
                 <CardHeader>
                   <CardTitle>
-                    {t("planTitle")} · {plan().sourceFormat} → {plan().targetFormat}
+                    {t("planTitle")} · {formatDisplayName(plan().sourceFormat)} → {formatDisplayName(plan().targetFormat)}
                   </CardTitle>
-                  <Badge variant="secondary">{plan().copyMode}</Badge>
                 </CardHeader>
                 <CardContent class="space-y-2.5">
                   <p class="text-xs text-muted-foreground tabular-nums">
@@ -673,10 +845,10 @@ export default function App() {
                         {(loss) => (
                           <li>
                             <Alert variant="warning">
-                              <Icon icon={TriangleAlert} class="mt-0.5" />
+                              <Icon icon={TriangleAlert} class="mt-0.5 shrink-0" />
                               <span>
                                 {t("planLossPrefix")}
-                                {loss}
+                                {formatLoss(loss)}
                               </span>
                             </Alert>
                           </li>
@@ -687,21 +859,7 @@ export default function App() {
 
                   <Show when={plan().warnings && plan().warnings!.length > 0}>
                     <ul class="flex flex-col gap-1.5">
-                      <For each={plan().warnings}>
-                        {(w) => {
-                          const notice = () => formatPlanNotice(w);
-                          return (
-                            <li>
-                              <Alert variant={notice().kind === "info" ? "default" : "warning"}>
-                                <Show when={notice().kind === "info"} fallback={<Icon icon={TriangleAlert} class="mt-0.5" />}>
-                                  <Icon icon={Info} class="mt-0.5 text-muted-foreground" />
-                                </Show>
-                                <span>{notice().text}</span>
-                              </Alert>
-                            </li>
-                          );
-                        }}
-                      </For>
+                      <For each={plan().warnings}>{(w) => <li>{renderNoticeAlert(w)}</li>}</For>
                     </ul>
                   </Show>
                 </CardContent>
@@ -727,7 +885,7 @@ export default function App() {
                       {(w) => (
                         <li>
                           <Alert variant="warning">
-                            <Icon icon={TriangleAlert} class="mt-0.5" />
+                            <Icon icon={TriangleAlert} class="mt-0.5 shrink-0" />
                             <span>{w}</span>
                           </Alert>
                         </li>
@@ -743,16 +901,16 @@ export default function App() {
           <Show when={result()}>
             {(res) => (
               <Alert variant="success">
-                <Icon icon={CircleCheck} class="mt-0.5" />
+                <Icon icon={CircleCheck} class="mt-0.5 shrink-0" />
                 <div class="tabular-nums">
                   <strong>{t("resultTitle")}</strong> —{" "}
-                  {t("resultSummary", {
+                  {t("resultSummarySimple", {
                     duration: formatDuration(res().durationMs),
                     total: res().assetCount.toLocaleString(),
-                    copied: res().copiedAssets.toLocaleString(),
-                    hardlinked: res().hardlinkedAssets.toLocaleString(),
-                    skipped: res().skippedAssets.toLocaleString(),
                   })}
+                  {res().skippedAssets > 0
+                    ? t("resultSummarySkipped", { skipped: res().skippedAssets.toLocaleString() })
+                    : ""}
                 </div>
               </Alert>
             )}
