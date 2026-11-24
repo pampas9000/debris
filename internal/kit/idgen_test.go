@@ -147,3 +147,38 @@ func TestAssignSnowflakeIDs_ChronologicalOrder(t *testing.T) {
 		t.Fatalf("2026-11-20 ID %d out of expected Pixcall epoch range [6e17, 7e17)", ids[2])
 	}
 }
+
+func TestNewULIDAndAssignULIDs(t *testing.T) {
+	ts := time.Date(2026, 11, 23, 15, 20, 52, 779_000_000, time.UTC)
+	id := NewULID(ts)
+	if len(id) != 26 {
+		t.Fatalf("len(ULID) = %d, want 26 (%q)", len(id), id)
+	}
+	for i := 0; i < len(id); i++ {
+		if !isULIDChar(id[i]) {
+			t.Fatalf("invalid ULID char %q in %q", id[i], id)
+		}
+	}
+
+	// Same millisecond calls stay strictly monotonic.
+	id2 := NewULID(ts)
+	if id2 <= id {
+		t.Fatalf("expected NewULID at same ms to increase: %q <= %q", id2, id)
+	}
+
+	t0 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)
+	t2 := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
+	ids := AssignULIDs([]time.Time{t2, t0, t1, t1})
+	if len(ids) != 4 {
+		t.Fatalf("len = %d, want 4", len(ids))
+	}
+	if !(ids[1] < ids[2] && ids[2] < ids[3] && ids[3] < ids[0]) {
+		t.Fatalf("ULIDs not in chronological order: %v", ids)
+	}
+}
+
+func isULIDChar(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'A' && b <= 'H') || (b >= 'J' && b <= 'K') ||
+		(b >= 'M' && b <= 'N') || (b >= 'P' && b <= 'T') || (b >= 'V' && b <= 'Z')
+}

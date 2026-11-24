@@ -32,3 +32,22 @@ func TestExtractPinyin(t *testing.T) {
 		})
 	}
 }
+
+func TestPinyinSearchIndex(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"建筑结构", "jianzhujiegou jzjg"},
+		{"户外", "huwai hw"},
+		{"树", "shu s"},
+		{"iPhone 15", ""},
+		{"", ""},
+		{"UI设计", "uisheji uisj"},
+	}
+	for _, tc := range cases {
+		if got := PinyinSearchIndex(tc.in); got != tc.want {
+			t.Fatalf("PinyinSearchIndex(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

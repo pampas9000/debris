@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/glebarez/sqlite"
+	"debris/internal/kit/gormsqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -78,7 +78,7 @@ func stringsHasLeadingSlash(s string) bool {
 }
 
 func openSQLite(dsn, displayPath string) (*gorm.DB, io.Closer, error) {
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(gormsqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {

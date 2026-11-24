@@ -68,3 +68,39 @@ func capitalizeASCII(s string) string {
 	}
 	return string(b)
 }
+
+// PinyinSearchIndex converts s containing Chinese characters into Refto's
+// "<full-lowercase> <initials-lowercase>" search index format (e.g. "建筑结构" ->
+// "jianzhujiegou jzjg"). Returns "" if s contains no Chinese characters.
+func PinyinSearchIndex(s string) string {
+	if s == "" {
+		return ""
+	}
+	args := pinyin.NewArgs()
+	var full, initials strings.Builder
+	hasHan := false
+
+	for _, r := range s {
+		syllables := pinyin.SinglePinyin(r, args)
+		if len(syllables) > 0 && syllables[0] != "" {
+			hasHan = true
+			syl := strings.ToLower(syllables[0])
+			full.WriteString(syl)
+			initials.WriteByte(syl[0])
+			continue
+		}
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			full.WriteRune(r)
+			initials.WriteRune(r)
+		} else if r >= 'A' && r <= 'Z' {
+			lr := r + ('a' - 'A')
+			full.WriteRune(lr)
+			initials.WriteRune(lr)
+		}
+	}
+
+	if !hasHan {
+		return ""
+	}
+	return full.String() + " " + initials.String()
+}

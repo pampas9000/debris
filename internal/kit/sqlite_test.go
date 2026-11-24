@@ -55,3 +55,27 @@ func TestSQLiteOpenReadWriteAndReadOnly(t *testing.T) {
 		t.Fatal("expected write on OpenReadOnly DB to fail")
 	}
 }
+
+func TestSQLiteSupportsFTS5ContentlessDelete(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "fts5.db")
+	db, closer, err := OpenReadWrite(dbPath)
+	if err != nil {
+		t.Fatalf("OpenReadWrite failed: %v", err)
+	}
+	defer closer.Close()
+
+	var version string
+	if err := db.Raw("SELECT sqlite_version()").Scan(&version).Error; err != nil {
+		t.Fatalf("SELECT sqlite_version() failed: %v", err)
+	}
+
+	if err := db.Exec(`CREATE VIRTUAL TABLE t_fts USING fts5(name, body, content='', contentless_delete=1)`).Error; err != nil {
+		t.Fatalf("CREATE VIRTUAL TABLE contentless_delete=1 failed (sqlite %s): %v", version, err)
+	}
+	if err := db.Exec(`INSERT INTO t_fts(rowid, name, body) VALUES (1, 'hello', 'world')`).Error; err != nil {
+		t.Fatalf("INSERT into FTS5 failed: %v", err)
+	}
+	if err := db.Exec(`DELETE FROM t_fts WHERE rowid = 1`).Error; err != nil {
+		t.Fatalf("DELETE from contentless_delete FTS5 failed: %v", err)
+	}
+}
