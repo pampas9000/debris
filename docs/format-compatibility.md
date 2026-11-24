@@ -11,7 +11,7 @@
 
 > 图标说明：`✅` 原生读写支持；`◐` 部分支持（读取或写入存在格式限制，详见下文）；`❌` 目标格式不支持或有意不迁移。
 
-| 特性 / 维度 | Eagle (`.library`, 4.x / Hive) | Pixcall (`.pixcall`, v22) | Refto (`.reflib`, v25 / Beta) | Billfish (`.bf`) |
+| 特性 / 维度 | Eagle (4.0.0 build 23 / Hive) | Pixcall (0.9.7+build5) | Refto (0.1.0-beta.10) | Billfish (3.0.32) |
 | :--- | :---: | :---: | :---: | :---: |
 | **读取（导入） / 写入（导出）** | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ⚠️ 不再维护 |
 | **存储模型** | JSON 元数据 + 资源子目录 | 真实磁盘目录 + SQLite | SQLite + 侧车 JSON + `items/` | 真实磁盘目录 + SQLite |
@@ -87,20 +87,20 @@ Debris 通过统一的内部领域模型（[internal/domain](../internal/domain/
 
 ## 3. 各平台支持详情与注意事项
 
-### 3.1 Eagle（`.library`，4.x / Hive 兼容）
+### 3.1 Eagle（4.0.0 build 23 / Hive 兼容）
 
 - **结构**：以库根目录 `metadata.json`、`tags.json`、`mtime.json` 及 `images/<ID>.info/`（内含资产文件、`metadata.json` 与可选 `_thumbnail.png`）组织；兼容同结构的 Hive 素材库。
 - **已支持**：嵌套文件夹（含描述、标签绑定、`modificationTime`、图标/颜色及文件夹密码字段透传）、多文件夹归属、标签与标签组、星标标签、调色板、评分、备注、来源 URL、回收站与缩略图迁移。
 - **限制与不迁移项**：无独立的素材隐藏状态；智能文件夹（`smartFolders`）暂不迁移。
 
-### 3.2 Pixcall（`.pixcall`，v22）
+### 3.2 Pixcall（0.9.7+build5）
 
 - **结构**：以真实文件夹树存储磁盘文件，元数据位于 `.pixcall/database/main.db`、`thumbs.db`、`config.json`、`<uuid>.id` 与加密 `keystore`。
 - **已支持**：嵌套文件夹（含布局、排序与封面关联）、标签与标签组、拼音索引、调色板、评分、备注、来源 URL、EXIF、音视频媒体元数据、回收站与隐藏状态。
 - **限制与不迁移项**：单文件仅支持单一文件夹归属；不导入源缩略图（由 Pixcall 打开后生成）；无星标标签；画板（`boards` / `board_entries`）、`captions` 与云端同步事件（`remote_events`）暂不迁移。
 - **细节参考**：[Pixcall 素材库格式兼容说明](pixcall-compatibility.md)。
 
-### 3.3 Refto（`.reflib`，v25 / Beta）
+### 3.3 Refto（0.1.0-beta.10）
 
 - **结构**：由 `act-library.json`、`act.db`（SQLite WAL + FTS5 全文索引）、`tags.json`、`items/<ULID>/`（文件与 `item.json`）及 `thumbs/<last2>/<ULID>.jpg` 组成。
 - **已支持**：嵌套文件夹（含描述、封面、自动标签及手动排序）、多文件夹归属、标签与标签组（含拼音搜索索引）、星标标签、OKLab 调色板与主色、评分、备注、来源 URL、EXIF/媒体信息、回收站、归档（映射为隐藏）、AI 建议标签（可选）与缩略图迁移。
@@ -110,7 +110,7 @@ Debris 通过统一的内部领域模型（[internal/domain](../internal/domain/
   - **明确不迁移项**：白板（`boards` / `board_nodes`）、智能文件夹（`smart_folders`）与保存筛选（`saved_filters`）、标注（`annotations`）与文本高亮（`highlights`）、OCR 与摘要文本（`texts`）、AI 向量与视觉/语音指纹（`segments` / `segment_vec768` / `vision` / `speech`）、文件夹密码锁（`folder_locks`）。
 - **细节参考**：[Refto 素材库格式兼容说明](refto-compatibility.md)。
 
-### 3.4 Billfish（`.bf`）
+### 3.4 Billfish（3.0.32）
 
 - **定位**：由于 Billfish 已停止更新维护，Debris 聚焦于**从 Billfish 无损迁出**到 Eagle、Pixcall 或 Refto（导出为 Billfish 的写入器保留但不再积极维护）。
 - **已支持（读取）**：嵌套文件夹（含封面与关联标签）、标签与标签组、嵌套父子标签、调色板、评分、备注、来源 URL、回收站（`bf_recycle`）、隐藏状态与缩略图。

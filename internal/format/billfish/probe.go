@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"debris/internal/format"
@@ -19,13 +18,28 @@ const (
 	FormatID = "billfish"
 	// FormatDisplayName is the human-readable name of the Billfish format.
 	FormatDisplayName = "Billfish"
-	// LibraryVersion is the Billfish SQLite schema version targeted by Writer.
+	// LibraryVersion is the internal Billfish SQLite library.version targeted by Writer,
+	// corresponding to Billfish 3.0.32 (DefaultAppVersion).
 	LibraryVersion = 41
+	// DefaultAppVersion is the user-facing Billfish application version mapped from LibraryVersion.
+	DefaultAppVersion = "3.0.32"
 
 	// seqScale maps Billfish fractional REAL seq values (e.g. 0.9000025) into
 	// int64 domain Seq fields without losing relative order or precision.
 	seqScale = 1_000_000_000.0
 )
+
+// schemaAppVersions maps Billfish internal library.version integers to their
+// corresponding user-facing Billfish application versions.
+var schemaAppVersions = map[int]string{
+	LibraryVersion: DefaultAppVersion, // library.version 41 -> Billfish 3.0.32
+}
+
+// AppVersionForSchema maps a Billfish internal library.version to its corresponding
+// user-facing application version, returning "" if unmapped.
+func AppVersionForSchema(libraryVersion int) string {
+	return schemaAppVersions[libraryVersion]
+}
 
 // Adapter implements format.Adapter for Billfish asset libraries.
 type Adapter struct{}
@@ -146,6 +160,9 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 	details := map[string]any{
 		"dbPath": dbPath,
 	}
+	if libRow.Version > 0 {
+		details["schemaVersion"] = libRow.Version
+	}
 	if libRow.Platform != "" {
 		details["platform"] = libRow.Platform
 	}
@@ -153,7 +170,7 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 	return format.ProbeResult{
 		Matched:    true,
 		Format:     FormatID,
-		Version:    strconv.Itoa(libRow.Version),
+		Version:    AppVersionForSchema(libRow.Version),
 		RootPath:   absPath,
 		Name:       name,
 		Confidence: 100,

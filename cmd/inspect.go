@@ -23,8 +23,8 @@ func newInspectCmd(eng *debris.Engine) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "inspect [path]",
 		Short: "Inspect a library and summarize its contents",
-		Example: `  debris inspect ./lib.library
-  debris inspect -p ./lib.billfish -f billfish --json`,
+		Example: `  debris inspect ./eagle-lib
+  debris inspect -p ./billfish-lib -f billfish --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

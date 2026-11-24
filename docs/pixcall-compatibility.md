@@ -1,6 +1,6 @@
 # Pixcall 素材库格式兼容说明
 
-本文档记录 `debris` 在生成 Pixcall 素材库（`schema_version = 22`）时必须满足的关键格式约定，及各自背后的原因，便于后续维护与排查。
+本文档记录 `debris` 在生成 Pixcall 素材库（适配 Pixcall `0.9.7+build5`）时必须满足的关键格式约定，及各自背后的原因，便于后续维护与排查。
 
 ## 1. 目录与核心元数据文件
 
@@ -9,8 +9,8 @@ Pixcall 桌面端校验与打开素材库时（`ValidateLibrary` / `open_metadat
 - `<library_id>.id`：空标记文件，文件名 UUID 即该库的 `library_id`。
 - `keystore` 与 `keystore.backup`：使用固定密钥以 RFC 8439 ChaCha20-Poly1305 加密后的 JSON 元数据（载荷为 `ciphertext || tag(16) || nonce(12)`），其中的 `library_id` 必须与 `<library_id>.id` 一致，且与 `main.db` 中 `kvs["app.installation_id"]` 区分开。
 - `config.json`：库级配置 JSON。
-- `database/main.db`：主元数据 SQLite 数据库（`kvs["schema_version"] = '22'`）。
-- `database/thumbs.db`：缩略图 SQLite 数据库（`thumbnails` 表与 `kvs` 表，且 `kvs["schema_version"] = '2'`）。导入插件与客户端均会打开该库；缺失会导致库校验或缩略图存取失败。
+- `database/main.db`：主元数据 SQLite 数据库（含 `kvs` 元数据表与各核心数据表，具体结构定义见 [schema.go](../internal/format/pixcall/model/schema.go)）。
+- `database/thumbs.db`：缩略图 SQLite 数据库（包含 `thumbnails` 表与 `kvs` 元数据表，具体结构定义见 [schema.go](../internal/format/pixcall/model/schema.go)）。导入插件与客户端均会打开该库；缺失会导致库校验或缩略图存取失败。
 
 相关实现见 [keystore.go](../internal/format/pixcall/keystore.go)、[schema.go](../internal/format/pixcall/model/schema.go) 与 [writer.go](../internal/format/pixcall/writer.go)。
 

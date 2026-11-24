@@ -16,11 +16,15 @@ import (
 const (
 	// FormatID is the adapter identifier for Eagle libraries.
 	FormatID = "eagle"
-	// DefaultAppVersion is the Eagle metadata version written by this adapter.
+	// DefaultAppVersion is the Eagle metadata.json applicationVersion value written by this adapter.
+	// Eagle 4.0.0 build 23 stores "4.0.0" in metadata.json.
 	DefaultAppVersion = "4.0.0"
+	// LatestAppVersion is the latest Eagle desktop release verified for this adapter,
+	// corresponding to metadata.json applicationVersion "4.0.0" (DefaultAppVersion).
+	LatestAppVersion = "4.0.0 build 23"
 )
 
-// Adapter implements format.Adapter for Eagle 4.x libraries.
+// Adapter implements format.Adapter for Eagle libraries (tested with Eagle 4.0.0 build 23, metadata applicationVersion 4.0.0).
 type Adapter struct{}
 
 // New returns a stateless Eagle format adapter.

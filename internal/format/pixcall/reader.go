@@ -146,7 +146,7 @@ func (r *Reader) Inspect(ctx context.Context) (format.InspectResult, error) {
 		return format.InspectResult{}, err
 	}
 
-	version, err := r.readSchemaVersion(ctx)
+	schemaVersion, err := r.readSchemaVersion(ctx)
 	if err != nil {
 		return format.InspectResult{}, err
 	}
@@ -173,11 +173,14 @@ func (r *Reader) Inspect(ctx context.Context) (format.InspectResult, error) {
 
 	res := format.InspectResult{
 		Format:        formatID,
-		Version:       version,
+		Version:       model.AppVersionForSchema(schemaVersion),
 		RootPath:      r.rootPath,
 		Name:          deriveLibraryName(r.rootPath),
 		TagGroupCount: int(tagGroupCount),
 		TagCount:      int(tagCount),
+	}
+	if schemaVersion != "" {
+		res.Extra = map[string]any{"schemaVersion": schemaVersion}
 	}
 
 	for _, e := range entries {
@@ -215,7 +218,7 @@ func (r *Reader) Read(ctx context.Context) (*domain.Library, error) {
 		return nil, err
 	}
 
-	version, err := r.readSchemaVersion(ctx)
+	schemaVersion, err := r.readSchemaVersion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +259,7 @@ func (r *Reader) Read(ctx context.Context) (*domain.Library, error) {
 
 	lib := &domain.Library{
 		Format:    formatID,
-		Version:   version,
+		Version:   model.AppVersionForSchema(schemaVersion),
 		RootPath:  r.rootPath,
 		Name:      deriveLibraryName(r.rootPath),
 		TagGroups: make([]*domain.TagGroup, 0, len(rawTagGroups)),

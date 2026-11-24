@@ -114,7 +114,7 @@ func TestProbe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !res.Matched || res.Format != "refto" || res.Confidence != 90 || res.Name != "Sketch" || res.Version != "25" {
+		if !res.Matched || res.Format != "refto" || res.Confidence != 90 || res.Name != "Sketch" || res.Version != "0.1.0-beta.10" {
 			t.Fatalf("unexpected ProbeResult: %+v", res)
 		}
 	})

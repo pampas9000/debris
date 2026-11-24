@@ -24,7 +24,7 @@ import (
 
 const dbInsertBatchSize = 200
 
-// Writer materializes a domain.Library into a Billfish v41 library directory.
+// Writer materializes a domain.Library into a Billfish library directory (Billfish 3.0.32, internal library.version 41).
 type Writer struct {
 	targetPath string
 	opts       format.WriteOptions

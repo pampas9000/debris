@@ -25,9 +25,9 @@ func newConvertCmd(eng *debris.Engine) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "convert [input] [output]",
 		Short: "Convert a library from one format to another",
-		Example: `  debris convert ./lib.billfish ./lib.library -t eagle
-  debris convert ./lib.billfish -t pixcall
-  debris convert -t pixcall -i ./lib.billfish -o ./pixcall-lib --copy-mode hardlink --json`,
+		Example: `  debris convert ./billfish-lib ./eagle-lib -t eagle
+  debris convert ./billfish-lib -t pixcall
+  debris convert -t pixcall -i ./billfish-lib -o ./pixcall-lib --copy-mode hardlink --json`,
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

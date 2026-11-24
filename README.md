@@ -12,10 +12,10 @@ Debris is a cross-platform Desktop GUI (MyGo + SolidJS) and CLI tool for inspect
 
 | Format | Read (Import) | Write (Export) | Notes |
 | :--- | :---: | :---: | :--- |
-| **Eagle** (`.library`, 4.x) | ✅ | ✅ | Tested & verified (including Hive compatibility) |
-| **Pixcall** (`.pixcall`, v22) | ✅ | ✅ | Tested & verified (see [Pixcall compatibility notes](docs/pixcall-compatibility.md)) |
-| **Refto** (`.reflib`, v25 / Beta) | ✅ | ✅ | Tested & verified (see [Refto compatibility notes](docs/refto-compatibility.md)) |
-| **Billfish** (`.bf`) | ✅ | ⚠️ Unmaintained | Supported for migrating *out* of Billfish. Billfish is discontinued, so exporting *to* Billfish is not actively maintained. |
+| **Eagle** (4.0.0 build 23) | ✅ | ✅ | Tested & verified (including Hive compatibility) |
+| **Pixcall** (0.9.7+build5) | ✅ | ✅ | Tested & verified (see [Pixcall compatibility notes](docs/pixcall-compatibility.md)) |
+| **Refto** (0.1.0-beta.10) | ✅ | ✅ | Tested & verified (see [Refto compatibility notes](docs/refto-compatibility.md)) |
+| **Billfish** (3.0.32) | ✅ | ⚠️ Unmaintained | Supported for migrating *out* of Billfish. Billfish is discontinued, so exporting *to* Billfish is not actively maintained. |
 
 For a complete per-platform feature matrix and details on how cross-format differences are handled, see the [Format Compatibility & Feature Handling Guide](docs/format-compatibility.md).
 
@@ -47,7 +47,7 @@ Download pre-built binaries and desktop installers from **[GitHub Releases](http
 
 ## Desktop App
 
-1. **Select Source Library:** Click **Browse…** in **Source Library** and pick your existing library folder (`.bf` / `.billfish`, `.library`, `.pixcall`, or `.reflib`). Debris automatically detects the format and displays asset, folder, tag, and size statistics.
+1. **Select Source Library:** Click **Browse…** in **Source Library** and pick your existing library folder (Eagle, Pixcall, Refto, or Billfish — no specific folder suffix is required). Debris automatically detects the format from the folder structure and displays asset, folder, tag, and size statistics.
 2. **Configure Target Output:** Choose the **Target Format** (`Eagle`, `Pixcall`, or `Refto`), pick a **Save Location** (parent directory), and adjust the **Library Name (Folder)** if needed.
 3. **Choose Transfer Mode & Options:**
    * **Auto** (recommended): Creates hardlinks on the same disk to save space, and automatically falls back to copying across different volumes.
@@ -61,17 +61,17 @@ Download pre-built binaries and desktop installers from **[GitHub Releases](http
 
 ### Convert a Library
 
-`debris convert [input] [output]` accepts both positional arguments and flags. If `[output]` / `--output` is omitted, Debris derives it automatically from the input path and `--to` (e.g., `./lib.billfish` with `-t eagle` → `./lib.library`).
+`debris convert [input] [output]` accepts both positional arguments and flags. If `[output]` / `--output` is omitted, Debris automatically derives a target folder path next to the input directory based on its name and `--to`.
 
 ```sh
 # Convert Billfish to Eagle using positional arguments
-debris convert ./lib.billfish ./lib.library -t eagle
+debris convert ./billfish-lib ./eagle-lib -t eagle
 
 # Convert Billfish to Pixcall (source format auto-detected, output path auto-derived)
-debris convert ./lib.billfish -t pixcall
+debris convert ./billfish-lib -t pixcall
 
 # Convert Eagle to Pixcall using flags, hardlinks, and NDJSON output
-debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink --json
+debris convert -t pixcall -i ./eagle-lib -o ./pixcall-lib --copy-mode hardlink --json
 
 # Convert Pixcall to Eagle quietly
 debris convert ./pixcall-lib -t eagle -q
@@ -95,7 +95,7 @@ debris convert ./pixcall-lib -t eagle -q
 ### Inspect a Library
 
 ```sh
-debris inspect ./lib.library
+debris inspect ./eagle-lib
 debris inspect -p ./pixcall-lib --json
 ```
 
@@ -113,8 +113,8 @@ debris inspect -p ./pixcall-lib --json
 `debris plan [input] [output]` supports the same source, target, transfer, and filter flags as `convert` (except `--quiet`), and outputs JSON when `--json` is passed.
 
 ```sh
-debris plan ./lib.billfish -t eagle
-debris plan -t pixcall -i ./lib.library -o ./pixcall-lib --json
+debris plan ./billfish-lib -t eagle
+debris plan -t pixcall -i ./eagle-lib -o ./pixcall-lib --json
 ```
 
 ## Development

@@ -1,13 +1,13 @@
 # Refto 素材库格式兼容说明
 
-本文档记录 `debris` 在读取与生成 Refto 素材库（`.reflib`，`act.db` `PRAGMA user_version = 25`）时遵循的结构与兼容性约定，便于后续维护与版本演进。
+本文档记录 `debris` 在读取与生成 Refto 素材库（适配 Refto `0.1.0-beta.10`）时遵循的结构与兼容性约定，便于后续维护与版本演进。
 
 ## 1. 目录与核心元数据文件
 
-Refto 素材库目录（`.reflib`）采用“SQLite 中心库 + JSON 侧车 + 分桶缩略图”的混合结构：
+Refto 素材库目录采用“SQLite 中心库 + JSON 侧车 + 分桶缩略图”的混合结构：
 
-- `act-library.json`：库级清单（`schema: 1`、26 位 ULID `id`、`name`、`createdAt`、`appVersion`、`storage`）。
-- `act.db`：核心 SQLite 数据库（`PRAGMA journal_mode = WAL`、`PRAGMA user_version = 25`），包含 `items`、`folders`、`item_folders`、`tag_groups`、`tags`、`item_tags`、`palettes`、`items_fts`（FTS5 全文索引）与 `listing_gen` 等 30+ 张表及触发器。
+- `act-library.json`：库级清单（清单结构标识 `schema`、26 位 ULID `id`、`name`、`createdAt`、`appVersion`、`storage`）。
+- `act.db`：核心 SQLite 数据库（`PRAGMA journal_mode = WAL`），包含 `items`、`folders`、`item_folders`、`tag_groups`、`tags`、`item_tags`、`palettes`、`items_fts`（FTS5 全文索引）与 `listing_gen` 等 30+ 张表及触发器（表结构与数据库初始化定义见 [schema.go](../internal/format/refto/model/schema.go)）。
 - `tags.json`：标签与标签组侧车文件（含 `pinyin` 搜索索引与 `starred`）。
 - `items/<ULID>/`：每个托管素材对应一个目录，包含原始文件与 `item.json` 侧车元数据。
 - `thumbs/<ID末两位小写>/<ULID>.jpg`：按素材 ID 末两位十六进制/Base32 字符分桶存放的 JPEG 缩略图。
@@ -34,5 +34,5 @@ Refto 素材库目录（`.reflib`）采用“SQLite 中心库 + JSON 侧车 + �
 6. **文件夹/标签颜色、图标、排序与时间戳精度**：
    - Refto 桌面端 UI（`mygo/ui`）会直接将非空的 `folders.color`、`tag_groups.color` 与 `tags.color` 传入 `ui.Hex(...)`，遇到 `"blue"`、`"red"` 等非十六进制命名颜色时会触发 `panic: ui: invalid color` 导致软件启动闪退。因此 [writer.go](../internal/format/refto/writer.go) 会将已知命名颜色（含 Pixcall/Eagle 色板名）与合法 `#rgb` / `#rrggbb` / `#rrggbbaa` 统一规范化为小写 `#rrggbb`（无法识别的置为 `""`）。
    - 同时会过滤外部格式的 `folders.icon`（如 Pixcall `:script:`、Emoji 十六进制码点或 Billfish 纯数字 ID），将 `folders.position` 与 `tag_groups.position` 规范化为从 `0` 开始的连续序号，并在补写 `folders.cover_item_id` 时使用 `UpdateColumn` 配合关闭 GORM 自动时间戳钩子，避免将 13 位毫秒级 `updated_at` 覆盖为 10 位秒级时间戳。
-7. **Beta 版本说明**：
-   - Refto 当前处于 `0.1.0-beta.10`（`user_version = 25`）阶段，若未来官方升级 `user_version` 导致表结构变化，需同步检查 [schema.go](../internal/format/refto/model/schema.go)。
+7. **版本兼容说明**：
+   - 当前已适配验证的 Refto 版本为 `0.1.0-beta.10`；若未来官方版本升级导致数据库表结构变化，需同步检查 [schema.go](../internal/format/refto/model/schema.go)。

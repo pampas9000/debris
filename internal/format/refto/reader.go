@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -232,7 +231,7 @@ func (r *reader) Inspect(ctx context.Context) (format.InspectResult, error) {
 	}
 	version := strings.TrimSpace(stats.manifest.AppVersion)
 	if version == "" && stats.userVersion > 0 {
-		version = strconv.Itoa(stats.userVersion)
+		version = model.AppVersionForSchema(stats.userVersion)
 	}
 
 	extra := map[string]any{
@@ -481,7 +480,7 @@ func (r *reader) Read(ctx context.Context) (*domain.Library, error) {
 	}
 	version := strings.TrimSpace(stats.manifest.AppVersion)
 	if version == "" && stats.userVersion > 0 {
-		version = strconv.Itoa(stats.userVersion)
+		version = model.AppVersionForSchema(stats.userVersion)
 	}
 
 	return &domain.Library{

@@ -61,11 +61,11 @@ func NewRootCmd(eng *debris.Engine) *cobra.Command {
 		Short:   "Convert and inspect design asset libraries across formats",
 		Long:    "Debris inspects, plans, and converts design asset libraries between formats such as Billfish, Eagle, Pixcall, and Refto.",
 		Version: versionString(),
-		Example: `  debris convert ./lib.billfish ./lib.library -t eagle
-  debris convert ./lib.billfish -t pixcall --json
-  debris convert "./My Library.reflib" -t eagle
-  debris inspect ./lib.library --json
-  debris plan ./lib.billfish -t eagle`,
+		Example: `  debris convert ./billfish-lib ./eagle-lib -t eagle
+  debris convert ./billfish-lib -t pixcall --json
+  debris convert "./My Refto Library" -t eagle
+  debris inspect ./eagle-lib --json
+  debris plan ./billfish-lib -t eagle`,
 	}
 
 	rootCmd.AddCommand(

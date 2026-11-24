@@ -43,7 +43,7 @@ func (p *Palette) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	return nil
 }
 
-// ImageMetadata represents images/<id>.info/metadata.json in an Eagle 4.0.0 library.
+// ImageMetadata represents images/<id>.info/metadata.json in an Eagle library (Eagle 4.0.0 build 23, applicationVersion 4.0.0).
 type ImageMetadata struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`

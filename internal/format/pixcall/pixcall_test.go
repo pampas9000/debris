@@ -123,7 +123,7 @@ func TestSampleLibraryProbeReadWriteRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Probe error: %v", err)
 	}
-	if !probeRes.Matched || probeRes.Format != "pixcall" || probeRes.Version != "22" || probeRes.Confidence != 100 {
+	if !probeRes.Matched || probeRes.Format != "pixcall" || probeRes.Version != "0.9.7+build5" || probeRes.Details["schemaVersion"] != "22" || probeRes.Confidence != 100 {
 		t.Fatalf("unexpected ProbeResult: %+v", probeRes)
 	}
 
@@ -137,7 +137,7 @@ func TestSampleLibraryProbeReadWriteRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Inspect error: %v", err)
 	}
-	if inspectRes.Version != "22" || inspectRes.TagGroupCount != 2 || inspectRes.TagCount != 3 ||
+	if inspectRes.Version != "0.9.7+build5" || inspectRes.TagGroupCount != 2 || inspectRes.TagCount != 3 ||
 		inspectRes.FolderCount != 0 || inspectRes.AssetCount != 6 || inspectRes.TotalBytes != 22594861 {
 		t.Fatalf("unexpected InspectResult: %+v", inspectRes)
 	}
@@ -235,7 +235,7 @@ func TestSampleLibraryProbeReadWriteRoundTrip(t *testing.T) {
 
 	// Re-probe and re-read written library
 	rtProbe, err := adapter.Probe(ctx, outLib)
-	if err != nil || !rtProbe.Matched || rtProbe.Version != "22" {
+	if err != nil || !rtProbe.Matched || rtProbe.Version != "0.9.7+build5" {
 		t.Fatalf("round-trip Probe = (%+v, %v)", rtProbe, err)
 	}
 	rtReader, err := adapter.OpenReader(ctx, outLib, format.ReadOptions{})

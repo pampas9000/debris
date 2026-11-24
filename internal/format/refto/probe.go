@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"debris/internal/format"
@@ -22,7 +21,7 @@ const (
 	DisplayName = "Refto"
 )
 
-// Adapter implements format.Adapter for Refto (.reflib, schema v25) libraries.
+// Adapter implements format.Adapter for Refto libraries (Refto 0.1.0-beta.10, internal user_version 25).
 type Adapter struct{}
 
 // New returns a stateless Refto format.Adapter.
@@ -57,7 +56,7 @@ func (a *Adapter) Capabilities() format.Capabilities {
 	}
 }
 
-// Probe inspects path to determine whether it is a valid Refto (.reflib) library directory.
+// Probe inspects path to determine whether it is a valid Refto library directory.
 func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, error) {
 	if err := ctx.Err(); err != nil {
 		return format.ProbeResult{}, err
@@ -131,7 +130,7 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 
 	version := strings.TrimSpace(manifest.AppVersion)
 	if version == "" && userVersion > 0 {
-		version = strconv.Itoa(userVersion)
+		version = model.AppVersionForSchema(userVersion)
 	}
 
 	details := map[string]any{

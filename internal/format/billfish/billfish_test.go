@@ -312,7 +312,7 @@ func TestWriteAndReadRoundTripSynthetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read all: %v", err)
 	}
-	if gotLib.Name != "SyntheticLib" || gotLib.Version != "41" {
+	if gotLib.Name != "SyntheticLib" || gotLib.Version != "3.0.32" {
 		t.Fatalf("unexpected lib header: %+v", gotLib)
 	}
 	if len(gotLib.Folders) != 3 || len(gotLib.TagGroups) != 1 || len(gotLib.Tags) != 3 || len(gotLib.Assets) != 8 {
@@ -390,7 +390,7 @@ func TestSampleLibraryProbeInspectReadWriteRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Probe failed: %v", err)
 	}
-	if !probeRes.Matched || probeRes.Format != "billfish" || probeRes.Version != "41" || probeRes.Name != "sample_libraries" {
+	if !probeRes.Matched || probeRes.Format != "billfish" || probeRes.Version != "3.0.32" || probeRes.Details["schemaVersion"] != LibraryVersion || probeRes.Name != "sample_libraries" {
 		t.Fatalf("unexpected ProbeResult: %+v", probeRes)
 	}
 
@@ -490,7 +490,7 @@ func TestSampleLibraryProbeInspectReadWriteRoundTrip(t *testing.T) {
 
 	// 5. Re-Probe, Re-Inspect, Re-Read round-tripped library
 	rtProbe, err := adapter.Probe(ctx, roundTripDir)
-	if err != nil || !rtProbe.Matched || rtProbe.Version != "41" || rtProbe.Name != "sample_libraries" {
+	if err != nil || !rtProbe.Matched || rtProbe.Version != "3.0.32" || rtProbe.Name != "sample_libraries" {
 		t.Fatalf("unexpected round-trip Probe: %+v err=%v", rtProbe, err)
 	}
 

@@ -14,9 +14,9 @@ func newPlanCmd(eng *debris.Engine) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan [input] [output]",
 		Short: "Preview a library conversion and potential compatibility losses",
-		Example: `  debris plan ./lib.billfish -t eagle
-  debris plan --from billfish --to eagle --input ./lib.billfish --output ./lib.library
-  debris plan -t pixcall -i ./lib.eagle -o ./pixcall-lib --copy-mode copy --json`,
+		Example: `  debris plan ./billfish-lib -t eagle
+  debris plan --from billfish --to eagle --input ./billfish-lib --output ./eagle-lib
+  debris plan -t pixcall -i ./eagle-lib -o ./pixcall-lib --copy-mode copy --json`,
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

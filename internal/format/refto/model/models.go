@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// LibraryManifest represents act-library.json at the root of a .reflib library.
+// LibraryManifest represents act-library.json at the root of a Refto library.
 type LibraryManifest struct {
 	Schema     int       `json:"schema"`
 	ID         string    `json:"id"`
@@ -16,7 +16,7 @@ type LibraryManifest struct {
 	Storage    string    `json:"storage"`
 }
 
-// TagsSidecar represents tags.json at the root of a .reflib library.
+// TagsSidecar represents tags.json at the root of a Refto library.
 type TagsSidecar struct {
 	Version int               `json:"version"`
 	Groups  []TagGroupSidecar `json:"groups"`
@@ -44,7 +44,7 @@ type TagSidecar struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// ItemSidecar represents items/<ULID>/item.json in a .reflib library.
+// ItemSidecar represents items/<ULID>/item.json in a Refto library.
 type ItemSidecar struct {
 	Version int              `json:"version"`
 	Item    ItemSidecarBody  `json:"item"`

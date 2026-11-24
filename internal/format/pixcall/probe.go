@@ -19,7 +19,7 @@ const (
 	trashEntryID int64 = 2
 )
 
-// Adapter implements format.Adapter for Pixcall asset libraries (schema_version 22).
+// Adapter implements format.Adapter for Pixcall asset libraries (Pixcall 0.9.7+build5, internal schema_version 22).
 type Adapter struct{}
 
 // New returns a stateless format.Adapter for Pixcall libraries.
@@ -131,13 +131,13 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 		}, nil
 	}
 
-	version := ""
+	schemaVersion := ""
 	if len(kvs) > 0 {
-		version = strings.TrimSpace(kvs[0].V)
+		schemaVersion = strings.TrimSpace(kvs[0].V)
 	}
 
 	confidence := 90
-	if version == model.SchemaVersion {
+	if schemaVersion == model.SchemaVersion {
 		confidence = 100
 	}
 
@@ -148,14 +148,14 @@ func (a *Adapter) Probe(ctx context.Context, path string) (format.ProbeResult, e
 		"hasConfig":   cfgErr == nil,
 		"hasKeystore": keystoreErr == nil,
 	}
-	if version != "" {
-		details["schemaVersion"] = version
+	if schemaVersion != "" {
+		details["schemaVersion"] = schemaVersion
 	}
 
 	return format.ProbeResult{
 		Matched:    true,
 		Format:     formatID,
-		Version:    version,
+		Version:    model.AppVersionForSchema(schemaVersion),
 		RootPath:   absPath,
 		Name:       deriveLibraryName(absPath),
 		Confidence: confidence,

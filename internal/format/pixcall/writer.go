@@ -27,7 +27,7 @@ import (
 
 const insertBatchSize = 200
 
-// Writer implements format.Writer for Pixcall libraries (schema_version 22).
+// Writer implements format.Writer for Pixcall libraries (Pixcall 0.9.7+build5, internal schema_version 22).
 type Writer struct {
 	rootPath string
 	opts     format.WriteOptions
@@ -74,7 +74,7 @@ func (w *Writer) Close() error {
 	return w.closeErr
 }
 
-// Write materializes lib as a Pixcall schema_version 22 library on disk.
+// Write materializes lib as a Pixcall library on disk (Pixcall 0.9.7+build5, internal schema_version 22).
 func (w *Writer) Write(ctx context.Context, lib *domain.Library, emit format.ProgressCallback) error {
 	if err := ctx.Err(); err != nil {
 		return err

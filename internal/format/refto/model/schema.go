@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	// SchemaVersion is the Refto act.db PRAGMA user_version supported by this adapter.
+	// SchemaVersion is the internal Refto act.db PRAGMA user_version corresponding to Refto 0.1.0-beta.10 (DefaultAppVersion).
 	SchemaVersion = 25
 	// ManifestSchema is the act-library.json schema version.
 	ManifestSchema = 1
@@ -18,6 +18,18 @@ const (
 	// DefaultAppVersion is the Refto application version written into act-library.json.
 	DefaultAppVersion = "0.1.0-beta.10"
 )
+
+// schemaAppVersions maps Refto internal act.db PRAGMA user_version values to
+// their corresponding user-facing Refto application versions.
+var schemaAppVersions = map[int]string{
+	SchemaVersion: DefaultAppVersion, // user_version 25 -> Refto 0.1.0-beta.10
+}
+
+// AppVersionForSchema maps a Refto internal PRAGMA user_version to its corresponding
+// user-facing application version, returning "" if unmapped.
+func AppVersionForSchema(userVersion int) string {
+	return schemaAppVersions[userVersion]
+}
 
 var schemaStatements = []string{
 	`CREATE TABLE IF NOT EXISTS items (
@@ -495,8 +507,8 @@ END`,
 ) WITHOUT ROWID`,
 }
 
-// Migrate initializes a Refto v25 SQLite database in db, enabling WAL mode and
-// foreign keys, creating all tables/indexes/triggers, setting user_version = 25,
+// Migrate initializes a Refto SQLite database in db (Refto 0.1.0-beta.10, internal user_version 25),
+// enabling WAL mode and foreign keys, creating all tables/indexes/triggers, setting user_version = 25,
 // and seeding listing_gen.
 func Migrate(db *gorm.DB) error {
 	for _, pragma := range []string{

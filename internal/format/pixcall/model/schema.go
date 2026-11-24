@@ -1,9 +1,29 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"strings"
 
-// SchemaVersion is the Pixcall database schema version supported by this package.
-const SchemaVersion = "22"
+	"gorm.io/gorm"
+)
+
+const (
+	// SchemaVersion is the internal Pixcall main.db schema_version corresponding to Pixcall 0.9.7+build5 (DefaultAppVersion).
+	SchemaVersion = "22"
+	// DefaultAppVersion is the user-facing Pixcall application version mapped from SchemaVersion.
+	DefaultAppVersion = "0.9.7+build5"
+)
+
+// schemaAppVersions maps Pixcall internal main.db schema_version values to their
+// corresponding user-facing Pixcall application versions.
+var schemaAppVersions = map[string]string{
+	SchemaVersion: DefaultAppVersion, // schema_version "22" -> Pixcall 0.9.7+build5
+}
+
+// AppVersionForSchema maps a Pixcall internal schema_version to its corresponding
+// user-facing application version, returning "" if unmapped.
+func AppVersionForSchema(schemaVersion string) string {
+	return schemaAppVersions[strings.TrimSpace(schemaVersion)]
+}
 
 // AllModels returns all Pixcall main.db GORM model pointers for AutoMigrate.
 func AllModels() []any {
@@ -33,7 +53,7 @@ var schemaIndexes = []string{
 	`CREATE INDEX IF NOT EXISTS idx_recent_entries_last_opened_at ON recent_entries (last_opened_at DESC)`,
 }
 
-// Migrate creates all Pixcall schema_version 22 tables and indexes in db.
+// Migrate creates all Pixcall tables and indexes in db (Pixcall 0.9.7+build5, internal schema_version 22).
 func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(AllModels()...); err != nil {
 		return err
@@ -46,7 +66,7 @@ func Migrate(db *gorm.DB) error {
 	return nil
 }
 
-// ThumbsSchemaVersion is the Pixcall thumbs.db schema version.
+// ThumbsSchemaVersion is the internal Pixcall thumbs.db schema version for Pixcall 0.9.7+build5.
 const ThumbsSchemaVersion = "2"
 
 var thumbsSchemaStatements = []string{

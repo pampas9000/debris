@@ -12,10 +12,10 @@ Debris 是一款跨平台桌面端 GUI 應用（基於 MyGo + SolidJS）與命�
 
 | 格式 | 讀取（匯入） | 寫入（匯出） | 說明 |
 | :--- | :---: | :---: | :--- |
-| **Eagle** (`.library`, 4.x) | ✅ | ✅ | 已測試驗證可用（含 Hive 相容） |
-| **Pixcall** (`.pixcall`, v22) | ✅ | ✅ | 已測試驗證可用（詳見 [Pixcall 相容說明](../pixcall-compatibility.md)） |
-| **Refto** (`.reflib`, v25 / Beta) | ✅ | ✅ | 已測試驗證可用（詳見 [Refto 相容說明](../refto-compatibility.md)） |
-| **Billfish** (`.bf`) | ✅ | ⚠️ 不再維護 | 支援從 Billfish 遷出。由於 Billfish 已停止更新與維護，匯出為 Billfish 不再積極維護。 |
+| **Eagle** (4.0.0 build 23) | ✅ | ✅ | 已測試驗證可用（含 Hive 相容） |
+| **Pixcall** (0.9.7+build5) | ✅ | ✅ | 已測試驗證可用（詳見 [Pixcall 相容說明](../pixcall-compatibility.md)） |
+| **Refto** (0.1.0-beta.10) | ✅ | ✅ | 已測試驗證可用（詳見 [Refto 相容說明](../refto-compatibility.md)） |
+| **Billfish** (3.0.32) | ✅ | ⚠️ 不再維護 | 支援從 Billfish 遷出。由於 Billfish 已停止更新與維護，匯出為 Billfish 不再積極維護。 |
 
 關於各平台支援的特性矩陣以及跨格式遷移時的相容處理細節，詳見 [各平台特性支援與跨格式處理指南](../format-compatibility.md)。
 
@@ -47,7 +47,7 @@ Debris 是一款跨平台桌面端 GUI 應用（基於 MyGo + SolidJS）與命�
 
 ## 桌面應用
 
-1. **選擇來源素材庫：** 在**來源素材庫**卡片中點擊**選擇目錄**，選取現有庫目錄（`.bf` / `.billfish`、`.library`、`.pixcall` 或 `.reflib`）。Debris 會自動辨識格式並顯示資產數、資料夾數、標籤數與總大小。
+1. **選擇來源素材庫：** 在**來源素材庫**卡片中點擊**選擇目錄**，選取現有的素材庫資料夾（Eagle、Pixcall、Refto 或 Billfish，不限資料夾副檔名）。Debris 會依據目錄結構自動辨識格式並顯示資產數、資料夾數、標籤數與總大小。
 2. **設定目標輸出：** 選擇**目標格式**（`Eagle`、`Pixcall` 或 `Refto`）、**儲存位置**（父目錄），並依需求修改**目標庫名稱（資料夾名）**。
 3. **選擇傳輸模式與遷移選項：**
    * **自動**（推薦）：同磁碟優先建立硬連結節省空間，跨磁碟自動改為複製。
@@ -61,17 +61,17 @@ Debris 是一款跨平台桌面端 GUI 應用（基於 MyGo + SolidJS）與命�
 
 ### 轉換素材庫
 
-`debris convert [input] [output]` 同時支援位置參數和旗標參數。若省略 `[output]` / `--output`，Debris 會依據輸入路徑和 `--to` 自動推導輸出路徑（例如 `./lib.billfish` 配合 `-t eagle` 將生成 `./lib.library`）。
+`debris convert [input] [output]` 同時支援位置參數和旗標參數。若省略 `[output]` / `--output`，Debris 會依據輸入資料夾路徑與 `--to` 在同層目錄下自動推導預設輸出目錄路徑。
 
 ```sh
 # 使用位置參數將 Billfish 素材庫轉換為 Eagle 素材庫
-debris convert ./lib.billfish ./lib.library -t eagle
+debris convert ./billfish-lib ./eagle-lib -t eagle
 
 # 將 Billfish 轉換為 Pixcall（自動識別來源格式並自動推導輸出路徑）
-debris convert ./lib.billfish -t pixcall
+debris convert ./billfish-lib -t pixcall
 
 # 使用旗標參數、硬連結模式將 Eagle 轉換為 Pixcall，並輸出 NDJSON 日誌
-debris convert -t pixcall -i ./lib.library -o ./pixcall-lib --copy-mode hardlink --json
+debris convert -t pixcall -i ./eagle-lib -o ./pixcall-lib --copy-mode hardlink --json
 
 # 靜默模式將 Pixcall 轉換為 Eagle
 debris convert ./pixcall-lib -t eagle -q
@@ -95,7 +95,7 @@ debris convert ./pixcall-lib -t eagle -q
 ### 檢查素材庫
 
 ```sh
-debris inspect ./lib.library
+debris inspect ./eagle-lib
 debris inspect -p ./pixcall-lib --json
 ```
 
@@ -113,8 +113,8 @@ debris inspect -p ./pixcall-lib --json
 `debris plan [input] [output]` 支援與 `convert` 相同的來源、目標、傳輸與過濾參數（不含 `--quiet`），傳入 `--json` 時輸出 JSON 格式的預檢結果。
 
 ```sh
-debris plan ./lib.billfish -t eagle
-debris plan -t pixcall -i ./lib.library -o ./pixcall-lib --json
+debris plan ./billfish-lib -t eagle
+debris plan -t pixcall -i ./eagle-lib -o ./pixcall-lib --json
 ```
 
 ## 開發與建置

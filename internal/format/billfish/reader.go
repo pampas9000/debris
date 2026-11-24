@@ -158,15 +158,22 @@ func (r *Reader) Inspect(ctx context.Context) (format.InspectResult, error) {
 
 	res := format.InspectResult{
 		Format:        FormatID,
-		Version:       strconv.Itoa(libRow.Version),
+		Version:       AppVersionForSchema(libRow.Version),
 		RootPath:      r.rootPath,
 		Name:          readLibraryName(r.rootPath),
 		FolderCount:   visibleFolders,
 		TagGroupCount: int(tagGroupCount),
 		TagCount:      int(tagCount),
 	}
+	extra := make(map[string]any)
+	if libRow.Version > 0 {
+		extra["schemaVersion"] = libRow.Version
+	}
 	if libRow.Platform != "" {
-		res.Extra = map[string]any{"platform": libRow.Platform}
+		extra["platform"] = libRow.Platform
+	}
+	if len(extra) > 0 {
+		res.Extra = extra
 	}
 
 	for _, f := range files {
@@ -532,7 +539,7 @@ func (r *Reader) Read(ctx context.Context) (*domain.Library, error) {
 
 	return &domain.Library{
 		Format:     FormatID,
-		Version:    strconv.Itoa(libRow.Version),
+		Version:    AppVersionForSchema(libRow.Version),
 		RootPath:   r.rootPath,
 		Name:       readLibraryName(r.rootPath),
 		CreatedAt:  libCreatedAt,
